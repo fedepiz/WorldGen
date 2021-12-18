@@ -1,5 +1,5 @@
-use super::*;
 use super::element_set::ElementSet;
+use super::*;
 
 pub use raylib::color::Color;
 
@@ -8,8 +8,8 @@ pub trait MapShader {
     fn edge(&self, id: EdgeId) -> Color;
 }
 
-use rand::{prelude::SmallRng, SeedableRng};
 use rand::Rng;
+use rand::{prelude::SmallRng, SeedableRng};
 
 #[allow(unused)]
 pub struct RandomColorShader {
@@ -20,16 +20,21 @@ pub struct RandomColorShader {
 impl RandomColorShader {
     pub fn new(poly: &PolyMap) -> Self {
         let mut rng = SmallRng::from_entropy();
-        let colors:Vec<_> = poly.cells.iter().map(|_| Color::new(rng.gen(),rng.gen(),rng.gen(),u8::MAX)).collect();
-        Self {
-            colors,
-        }
+        let colors: Vec<_> = poly
+            .cells
+            .iter()
+            .map(|_| Color::new(rng.gen(), rng.gen(), rng.gen(), u8::MAX))
+            .collect();
+        Self { colors }
     }
 }
 
 impl MapShader for RandomColorShader {
     fn cell(&self, id: CellId) -> Color {
-        self.colors.get(id.0).copied().unwrap_or_else(|| Color::WHITE)
+        self.colors
+            .get(id.0)
+            .copied()
+            .unwrap_or_else(|| Color::WHITE)
     }
 
     fn edge(&self, _: EdgeId) -> Color {
@@ -48,10 +53,18 @@ impl HighlightShader {
 
 impl MapShader for HighlightShader {
     fn cell(&self, id: CellId) -> Color {
-        if self.0.cells.contains(&id) { Color::RED } else { Color::WHITE }
+        if self.0.cells.contains(&id) {
+            Color::RED
+        } else {
+            Color::WHITE
+        }
     }
 
     fn edge(&self, id: EdgeId) -> Color {
-        if self.0.edges.contains(&id) { Color::YELLOW } else { Color::BLACK }
+        if self.0.edges.contains(&id) {
+            Color::YELLOW
+        } else {
+            Color::BLACK
+        }
     }
 }

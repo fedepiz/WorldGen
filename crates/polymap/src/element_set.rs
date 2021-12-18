@@ -2,9 +2,9 @@ use super::*;
 
 #[derive(Default)]
 pub struct ElementSet {
-    pub cells: HashSet<CellId>, 
-    pub edges: HashSet<EdgeId>, 
-    pub corners: HashSet<CornerId> 
+    pub cells: HashSet<CellId>,
+    pub edges: HashSet<EdgeId>,
+    pub corners: HashSet<CornerId>,
 }
 
 impl ElementSet {
@@ -24,7 +24,7 @@ impl ElementSet {
         self.corners.clear();
     }
 
-    pub fn add_cell(&mut self, cell: CellId, poly_map:&PolyMap) {
+    pub fn add_cell(&mut self, cell: CellId, poly_map: &PolyMap) {
         self.cells.insert(cell);
         let cell = &poly_map.cells[cell.0];
         for &edge_id in cell.edges.iter() {
@@ -36,7 +36,7 @@ impl ElementSet {
     }
 }
 
-fn join_set<T:Copy + Eq + std::hash::Hash>(s1: &mut HashSet<T>, s2: &HashSet<T>) {
+fn join_set<T: Copy + Eq + std::hash::Hash>(s1: &mut HashSet<T>, s2: &HashSet<T>) {
     for &x in s2 {
         s1.insert(x);
     }

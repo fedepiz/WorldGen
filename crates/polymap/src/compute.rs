@@ -26,7 +26,10 @@ impl <T> CornerData<T> {
         }
     }
 
-    pub fn spread<U>(&mut self, poly_map: &PolyMap, starting: CornerId, mut accum:U, mut next:impl FnMut(U) -> Option<U>, mut update: impl FnMut(CornerId, &mut T, &U)) {
+    pub fn spread<U>(&mut self, poly_map: &PolyMap, starting: CornerId, 
+            mut accum:U, mut next:impl FnMut(U) -> Option<U>, 
+            mut update: impl FnMut(CornerId, &mut T, &U)) {
+                
         let mut visited = HashSet::new();
         let mut queue = vec![starting];
         let mut next_iteration = vec![];
@@ -54,7 +57,6 @@ impl <T> CornerData<T> {
             };
             std::mem::swap(&mut queue, &mut next_iteration)
         }
-
     }
 }
 
@@ -71,6 +73,19 @@ impl <T:Clone> CornerData<T> {
         }
     }
 }
+
+impl <T> std::ops::Index<CornerId> for CornerData<T> {
+    type Output = T;
+    fn index(&self, index: CornerId) -> &Self::Output {
+        &self.data[index.0]
+    }
+}
+impl <T> std::ops::IndexMut<CornerId> for CornerData<T> {
+    fn index_mut(&mut self, index: CornerId) -> &mut Self::Output {
+        &mut self.data[index.0]
+    }
+}
+
 
 #[derive(Clone)]
 pub struct CellData<T> {

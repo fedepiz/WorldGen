@@ -79,8 +79,31 @@ impl HeightMapBuilder {
     fn build(self, poly_map:&PolyMap) -> HeightMap {
         let cells: CellData<f64> = CellData::corner_average(poly_map, &self.corners);
         
+        let descent_vector = CornerData::for_each(poly_map, |id, corner| {
+            let my_elevation = self.corners[id];
+            let mut slope: Option<Slope> = None;
+
+            for &neighbor in corner.neighbors() {
+                let neighbor_elevation = self.corners[neighbor];
+                let diff = my_elevation - neighbor_elevation;
+                if diff > 0.0 {
+                    let update = match slope {
+                        None => true,
+                        Some(slope) => slope.intensity < diff,
+                    };
+                    if update {
+                        slope = Some(Slope {
+                            towards: neighbor,
+                            intensity: diff,
+                        });
+                    }
+                }
+            }
+            slope
+        });
+
         HeightMap {
-            corners: self.corners, cells
+            corners: self.corners, cells, descent_vector
         }
     }
 }
@@ -88,8 +111,29 @@ impl HeightMapBuilder {
 pub struct HeightMap {
     pub corners: CornerData<f64>,
     pub cells: CellData<f64>,
+    descent_vector: CornerData<Option<Slope>>,
 }
 
+#[derive(Clone, Copy)]
+struct Slope {
+    towards: CornerId,
+    intensity: f64,
+}
+
+pub struct Rivers {
+    flow_volume: CornerData<f64>,
+}
+
+impl Rivers {
+    pub fn new(poly_map: &PolyMap, height_map: &HeightMap, base_flow: f64) -> Rivers {
+        let mut flow_volume = CornerData::for_each(poly_map, |_,_| base_flow);
+
+
+        Rivers {
+            flow_volume
+        }
+    }
+}
 
 pub struct WorldGenerator;
 
@@ -130,7 +174,6 @@ impl WorldGenerator {
 
         let terrain_types = heightmap.cells
             .transform(|_, &x| TerrainType::from_height(x));
-
 
         WorldMap {
             heightmap,

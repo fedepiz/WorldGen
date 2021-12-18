@@ -167,8 +167,6 @@ impl PolyMap {
             cell_quadtree
         };
 
-        println!("{}/{}/{}", cells.len(), voronoi.cells().len(), voronoi.neighbors.len());
-
         PolyMap {
             width, height,
             cells, edges, corners, 
@@ -240,6 +238,9 @@ impl PolyMap {
         }
         (corners, edges, cells)
     }
+
+    pub fn width(&self) -> usize { self.width }
+    pub fn height(&self) -> usize { self.height }
 
     pub fn polygon_at(&self, px: f32, py: f32) -> Option<CellId> {
         if px < 0.0 || py < 0.0 {

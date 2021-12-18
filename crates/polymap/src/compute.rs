@@ -1,5 +1,6 @@
 use super::*;
 
+#[derive(Clone)]
 pub struct CornerData<T> {
     pub data: Vec<T>
 }
@@ -8,8 +9,15 @@ impl <T> CornerData<T> {
     pub fn for_each(poly_map: &PolyMap, mut f: impl FnMut(CornerId, &Corner) -> T) -> Self {
         Self { data: poly_map.corners().map(|(id, c)| f(id,c)).collect() }
     }
+
+    pub fn update_each(&mut self, poly_map: &PolyMap, mut f: impl FnMut(CornerId, &Corner, &mut T)) {
+        for ((corner_id, corner), data) in poly_map.corners().zip(self.data.iter_mut()) {
+            f(corner_id, corner, data)
+        }
+    }
 }
 
+#[derive(Clone)]
 pub struct CellData<T> {
     pub data:Vec<T>
 }

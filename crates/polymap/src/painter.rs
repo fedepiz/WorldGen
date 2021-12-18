@@ -7,55 +7,48 @@ use super::element_set::ElementSet;
 
 type Handle<'a> = RaylibTextureMode<'a, RaylibDrawHandle<'a>>;
 
-pub struct Painter<S:MapShader> {
+pub struct Painter{
     texture: RenderTexture2D,
     validation: Validation,
-    shader: S,
 }
 
-impl <S:MapShader> Painter<S> {
-    pub fn new(rl: &mut RaylibHandle, thread: &RaylibThread, polymap:&PolyMap, shader: S) -> Result<Self, String> {
+impl  Painter {
+    pub fn new(rl: &mut RaylibHandle, thread: &RaylibThread, polymap:&PolyMap) -> Result<Self, String> {
         let texture = rl
             .load_render_texture(thread, polymap.width as u32, polymap.height as u32)?;
 
         Ok(Self {
             texture,
             validation: Validation::Invalid,
-            shader,
         })
     }
 
-    pub fn draw(&mut self, ctx: &mut RaylibDrawHandle, thread:&RaylibThread, x:i32, y: i32, poly_map:&PolyMap) {
+    pub fn draw(&mut self, ctx: &mut RaylibDrawHandle, thread:&RaylibThread, x:i32, y: i32, poly_map:&PolyMap, shader:&impl MapShader) {
         if !self.validation.is_valid() {
-            self.draw_all(ctx, thread, poly_map);
+            self.draw_all(ctx, thread, poly_map, shader);
             self.validation = Validation::Valid;
         }
 
         ctx.draw_texture(&self.texture,x, y, Color::WHITE);
     }
 
-    pub fn invalidate(&mut self) {
-        self.validation = Validation::Invalid;
+    pub fn invalidate(&mut self, validation: Validation) {
+        self.validation.join(validation)
     } 
 
-    pub fn update_shader(&mut self, f: impl FnOnce(&mut S) -> Validation) {
-        let val = f(&mut self.shader);
-        self.validation.join(val);
-    }
-
-    pub fn draw_all(&mut self, ctx: &mut RaylibDrawHandle, thread:& RaylibThread, poly_map:&PolyMap) {
+    pub fn draw_all(&mut self, ctx: &mut RaylibDrawHandle, thread:& RaylibThread, poly_map:&PolyMap, shader: &impl MapShader) {
         let mut tctx = ctx.begin_texture_mode(&thread, &mut self.texture);
 
         tctx.draw_rectangle(0, 0, poly_map.width as i32, poly_map.height as i32, Color::WHITE);
 
         {
-            Self::draw_cells(&mut tctx, poly_map, &self.shader, &self.validation);
-            Self::draw_edges(&mut tctx, poly_map, &self.shader);
+            Self::draw_cells(&mut tctx, poly_map, shader, &self.validation);
+            Self::draw_edges(&mut tctx, poly_map, shader);
             Self::draw_corners(&mut tctx, poly_map);
         };
     }
 
-    fn draw_cells(ctx: &mut Handle, poly_map:&PolyMap, shader:&S, validation: &Validation) {
+    fn draw_cells(ctx: &mut Handle, poly_map:&PolyMap, shader:&impl MapShader, validation: &Validation) {
         use lyon::math::{Point};
         use lyon::path::{builder::*};
         use lyon::tessellation::{FillTessellator, FillOptions, VertexBuffers};
@@ -98,7 +91,7 @@ impl <S:MapShader> Painter<S> {
         }
     }
 
-    fn draw_edges(ctx: &mut Handle, poly_map:&PolyMap, shader: &S) {
+    fn draw_edges(ctx: &mut Handle, poly_map:&PolyMap, shader: &impl MapShader) {
         for (id, edge) in poly_map.edges() {
             let ((ax, ay), (bx, by)) = poly_map.edge_endpoints_coords(edge);
             let start = Vector2::new(ax as f32, poly_map.height as f32 - ay as f32);

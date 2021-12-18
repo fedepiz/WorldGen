@@ -1,6 +1,7 @@
 use super::*;
 use super::element_set::ElementSet;
-use raylib::color::Color;
+
+pub use raylib::color::Color;
 
 pub trait MapShader {
     fn cell(&self, id: CellId) -> Color;
@@ -39,6 +40,7 @@ impl MapShader for RandomColorShader {
 pub struct HighlightShader(pub ElementSet);
 
 impl HighlightShader {
+    #[allow(unused)]
     pub fn new() -> Self {
         Self(ElementSet::new())
     }

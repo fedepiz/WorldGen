@@ -1,5 +1,5 @@
 [package]
-name = "frontend"
+name = "polymap"
 version = "0.1.0"
 edition = "2021"
 
@@ -8,6 +8,8 @@ edition = "2021"
 [dependencies]
 raylib = { version = "*" }
 rand = { version = "*", features = ["small_rng"]}
-
-polymap = { path = "../polymap" }
-worldgen = { path = "../worldgen"}
+lyon = "*"
+fast_poisson = "*"
+voronator = "*"
+geo = "*"
+quadtree_rs = "*"

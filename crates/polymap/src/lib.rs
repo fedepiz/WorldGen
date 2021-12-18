@@ -1,6 +1,7 @@
 pub mod element_set;
 pub mod painter;
 pub mod map_shader;
+pub mod compute;
 
 use geo::{contains::Contains, coords_iter::CoordsIter, Polygon};
 use std::{collections::{HashMap, HashSet}};
@@ -51,11 +52,21 @@ pub struct EdgeId(usize);
 pub struct Cell {
     polygon: Polygon<f64>,
     edges: Vec<EdgeId>,
+    corners: Vec<CornerId>,
+    neighbors: Vec<CellId>,
 }
 
 impl Cell {
-    pub fn new(polygon: Polygon<f64>, edges: Vec<EdgeId>) -> Self {
-        Self { polygon, edges }
+    fn new(polygon: Polygon<f64>, edges: Vec<EdgeId>, corners:Vec<CornerId>) -> Self {
+        Self { polygon, edges, corners, neighbors: vec![] }
+    }
+
+    pub fn corners(&self) -> &[CornerId] {
+        self.corners.as_slice()
+    }
+
+    pub fn neighbors(&self) -> &[CellId] {
+        self.neighbors.as_slice()
     }
 }
 
@@ -83,14 +94,14 @@ pub struct Edge {
 }
 
 impl Edge {
-    pub fn new(c1: CornerId, c2: CornerId) -> Self {
+    fn new(c1: CornerId, c2: CornerId) -> Self {
         Self {
             endpoints: OrderedPair::new(c1, c2),
             cells: vec![],
         }
     }
 
-    pub fn add_owner(&mut self, cell: CellId) { self.cells.push(cell) }
+    fn add_owner(&mut self, cell: CellId) { self.cells.push(cell) }
 }
 
 #[derive(Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Hash)]
@@ -133,7 +144,15 @@ impl PolyMap {
             geo::Polygon::new(geo::LineString::from(exterior), vec![])
         }).collect();
 
-        let (corners, edges, cells) = Self::build_elements(polygons);
+        let (corners, edges, mut cells) = Self::build_elements(polygons);
+
+        // NOTE: Some indices point beyond the number of cells. These are meant
+        // for the borders, I think. Skip them 
+        for (idx, cell) in cells.iter_mut().enumerate(){
+            cell.neighbors = voronoi.neighbors[idx].iter().copied()
+                .filter(|idx| idx < &centers.len())
+                .map(|idx| CellId(idx)).collect();
+        }
 
         let cell_quadtree = {
             let mut cell_quadtree = {
@@ -147,6 +166,8 @@ impl PolyMap {
             }
             cell_quadtree
         };
+
+        println!("{}/{}/{}", cells.len(), voronoi.cells().len(), voronoi.neighbors.len());
 
         PolyMap {
             width, height,
@@ -164,6 +185,7 @@ impl PolyMap {
         let mut corners_lookup:HashMap<_, CornerId> = HashMap::new();
 
         for (cell_id, polygon) in polygons.into_iter().enumerate() {
+            let mut cell_edges = vec![];
 
             let mut add_corner = |edge_id: EdgeId, location:Location| {
                 match corners_lookup.get(&location) {
@@ -181,12 +203,16 @@ impl PolyMap {
                 }
             };
 
+            let mut cell_corners = vec![];
+
             let mut add_edge = |cell_id: CellId, line:&geo::Line<f64>| {
                 let endpoints = OrderedPair::new(Location::from(line.start), Location::from(line.end));
                 match edges_lookup.get(&endpoints) {
                     Some(&edge_id) => {
                         let edge = &mut edges[edge_id.0];
                         edge.add_owner(cell_id);
+                        cell_corners.push(edge.endpoints.min);
+                        cell_corners.push(edge.endpoints.max);
                         edge_id
                     }
                     None => {
@@ -196,6 +222,8 @@ impl PolyMap {
                         let c2 = add_corner(edge_id, endpoints.max);
                         let mut edge = Edge::new(c1, c2);
                         edge.add_owner(cell_id);
+                        cell_corners.push(edge.endpoints.min);
+                        cell_corners.push(edge.endpoints.max);
                         edges.push(edge);
                         edge_id
                     }
@@ -203,12 +231,12 @@ impl PolyMap {
             };
 
             let cell_id = CellId(cell_id);
-            let mut cell_edges = vec![];
+
             for line in polygon.exterior().lines() {
                 let edge_id = add_edge(cell_id, &line);
                 cell_edges.push(edge_id)
             }
-            cells.push(Cell::new(polygon, cell_edges))
+            cells.push(Cell::new(polygon, cell_edges, cell_corners))
         }
         (corners, edges, cells)
     }
@@ -274,3 +302,5 @@ impl PolyMap {
             .anchor(min_p).dimensions(max_p).build().unwrap()    
     }
 }
+
+

@@ -1,4 +1,14 @@
 use super::*;
+use rand::Rng;
+pub struct CornerPicker;
+
+impl CornerPicker {
+    pub fn random(poly_map:&PolyMap, rng: &mut impl Rng) -> CornerId {
+        CornerId(rng.gen_range(0..poly_map.corners.len()))
+    }
+}
+
+
 
 #[derive(Clone)]
 pub struct CornerData<T> {
@@ -13,6 +23,51 @@ impl <T> CornerData<T> {
     pub fn update_each(&mut self, poly_map: &PolyMap, mut f: impl FnMut(CornerId, &Corner, &mut T)) {
         for ((corner_id, corner), data) in poly_map.corners().zip(self.data.iter_mut()) {
             f(corner_id, corner, data)
+        }
+    }
+
+    pub fn spread<U>(&mut self, poly_map: &PolyMap, starting: CornerId, mut accum:U, mut next:impl FnMut(U) -> Option<U>, mut update: impl FnMut(CornerId, &mut T, &U)) {
+        let mut visited = HashSet::new();
+        let mut queue = vec![starting];
+        let mut next_iteration = vec![];
+
+        visited.insert(starting);
+
+        loop {        
+            while !queue.is_empty() {
+                let node = queue.pop().unwrap();
+                update(node, &mut self.data[node.0], &accum);
+
+                for &neighbor in poly_map.corner(node).neighbors() {
+                    if !visited.contains(&neighbor) {
+                        next_iteration.push(neighbor);
+                        visited.insert(neighbor);
+                    }
+                }
+            }
+            if next_iteration.is_empty() {
+                return;
+            }
+            accum = match next(accum) {
+                None => return,
+                Some(x) => x,
+            };
+            std::mem::swap(&mut queue, &mut next_iteration)
+        }
+
+    }
+}
+
+impl <T:Clone> CornerData<T> {
+    pub fn update_with_neighbors(&mut self, poly_map: &PolyMap, mut f: impl FnMut(&mut T, &[&T])) {
+        let mut buf = vec![];
+        let read_data = self.data.clone();
+        for (id, corner) in poly_map.corners() {
+            buf.clear();
+            for &neighbor in corner.neighbors() {
+                buf.push(&read_data[neighbor.0]);
+            }
+            f(&mut self.data[id.0], buf.as_slice())
         }
     }
 }

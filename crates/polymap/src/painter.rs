@@ -104,7 +104,7 @@ impl  Painter {
 
     fn draw_corners(ctx: &mut Handle, poly_map: &PolyMap) {
         for (_, corner) in poly_map.corners() {
-            let tile_halfsize = 1.0;
+            let tile_halfsize = 0.5;
             
             let half_size = Vector2::zero() + tile_halfsize;
             let position = Vector2::new(corner.x() as f32, poly_map.height as f32 - corner.y() as f32) - half_size;

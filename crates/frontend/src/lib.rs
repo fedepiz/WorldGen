@@ -6,7 +6,7 @@ use worldgen::{WorldGenerator, ViewMode};
 pub fn main() {
     let seed = 270493;
 
-    let poly_map = polymap::PolyMap::new(800, 600, 10.0);
+    let poly_map = polymap::PolyMap::new(800, 600, 5.0);
     let mut world = WorldGenerator::new()
         .generate(&poly_map, seed);
 

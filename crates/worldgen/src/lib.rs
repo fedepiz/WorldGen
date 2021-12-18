@@ -36,7 +36,7 @@ impl HeightMapBuilder {
             let px =  x_rand + corner.x() * perlin_freq;
             let py = y_rand + corner.y() * perlin_freq;
             let noise = perlin.get([px, py]);
-            *h += noise * intensity;
+            *h += (noise + 1.0)/2.0 * intensity;
         })
     }
 
@@ -51,10 +51,29 @@ impl HeightMapBuilder {
         })
     }
 
+
+
+    fn clump(&mut self, poly_map:&PolyMap, amount: f64, decay: f64, end: f64, rng: &mut impl Rng) {
+        let starting = CornerPicker::random(poly_map, rng);
+        self.corners.spread(poly_map, starting, amount, 
+            |accum| if accum.abs() > end.abs() { Some(accum * decay) } else { None }, 
+            |_, corner_height, x| 
+                *corner_height += *x
+            )
+    }
+
     fn normalize(&mut self) {
         let min = self.corners.data.iter().copied().reduce(f64::min).unwrap();
         let max = self.corners.data.iter().copied().reduce(f64::max).unwrap();
         self.corners.data.iter_mut().for_each(|x| *x = (*x - min)/(max - min));
+    }
+
+    fn relax(&mut self, poly_map:&PolyMap, t: f64) {
+        self.corners.update_with_neighbors(poly_map, |x, neighborhood| {
+            let average = neighborhood.iter().copied().sum::<f64>();
+            let n = neighborhood.len() as f64;
+            *x = t * (average/n) + (1.0 - t) * *x
+        })
     }
 
     fn build(self, poly_map:&PolyMap) -> HeightMap {
@@ -72,63 +91,46 @@ pub struct HeightMap {
 }
 
 
-pub struct WorldGenerator {
-    height_perlin_freq: f64,
-    remove_land_stragglers: bool,
-}
+pub struct WorldGenerator;
 
 impl WorldGenerator {
-    pub fn new() -> Self {
-        Self {
-            height_perlin_freq: 0.005,
-            remove_land_stragglers: true,
-        }
-    }
-    
-    fn terrain_type(&self, height: f64) -> TerrainType {
-        const LEVELS: &'static [(TerrainType, f64)] = &[
-            (TerrainType::Water, 0.4),
-            (TerrainType::Land, 0.6),
-            (TerrainType::Hill, 0.8),
-            (TerrainType::Mountain, 1.0),
-        ];
-
-        LEVELS.iter()
-            .find_map(|&(tt, x)| if height <= x { Some(tt) } else { None })
-            .expect("Invalid terrain type, heightmap out of bounds")
-    }
+    pub fn new() -> Self { Self }
 
     pub fn generate(&self, poly_map: &PolyMap, seed: u64) -> WorldMap {
         let mut rng = SmallRng::seed_from_u64(seed);
         let rng = &mut rng;
 
         let heightmap = {
-            let mut hm = HeightMapBuilder::new(&poly_map, 0.5);
+            let mut hm = HeightMapBuilder::new(&poly_map, 0.);
 
-            let num_slopes = rng.gen_range(1..=2);
-            for _ in 0..num_slopes {
-                hm.random_slope(poly_map, 0.001, rng);
+            hm.random_slope(poly_map, 0.0005, rng);
+
+            hm.perlin_noise(poly_map, 0.001, 1.0, rng);
+            hm.perlin_noise(poly_map, 0.01, 0.2, rng);
+            
+            let positive_clumps = 2;
+            let negative_clumps = 0;
+
+            for _ in 0 .. positive_clumps {
+                hm.clump(poly_map,0.2, 0.90, 0.05, rng)
             }
-            hm.perlin_noise(poly_map, self.height_perlin_freq, 0.5, rng);
+
+            for _ in 0 .. negative_clumps {
+                hm.clump(poly_map, -0.2, 0.96, 0.1, rng);
+            }
+
+            let num_relax = 3;
+            for _ in 0..num_relax {
+                hm.relax(poly_map, 0.2);
+            }
+
             hm.normalize();
             hm.build(&poly_map)
         };
 
-        let mut terrain_types = heightmap.cells
-            .transform(|_, &x| self.terrain_type(x));
+        let terrain_types = heightmap.cells
+            .transform(|_, &x| TerrainType::from_height(x));
 
-        if self.remove_land_stragglers {
-            let found:Vec<_> = terrain_types.find_with_all_neighbors(poly_map, |_, terrain| {
-                match terrain {
-                    TerrainType::Water => true,
-                    _ => false,
-                }
-            }).collect();
-
-            for cell in found {
-                terrain_types[cell] = TerrainType::Water;
-            }
-        }
 
         WorldMap {
             heightmap,
@@ -140,10 +142,27 @@ impl WorldGenerator {
 
 #[derive(Clone, Copy)]
 enum TerrainType {
+    DeepWater,
     Water,
     Land,
     Hill,
     Mountain,
+}
+
+impl TerrainType {
+    fn from_height(height: f64) -> TerrainType {
+        const LEVELS: &'static [(TerrainType, f64)] = &[
+            (TerrainType::DeepWater, 0.1),
+            (TerrainType::Water, 0.5),
+            (TerrainType::Land, 0.75),
+            (TerrainType::Hill, 0.9),
+            (TerrainType::Mountain, 1.0),
+        ];
+
+        LEVELS.iter()
+            .find_map(|&(tt, x)| if height <= x { Some(tt) } else { None })
+            .expect("Invalid terrain type, heightmap out of bounds")
+    }
 }
 
 
@@ -174,6 +193,7 @@ impl <'a> MapShader for WorldMapView<'a> {
             }
             ViewMode::Terrain => {
                 match self.world_map.terrain_types[id] {
+                    TerrainType::DeepWater => Color::DARKBLUE,
                     TerrainType::Water => Color::BLUE,
                     TerrainType::Land => Color::GREEN,
                     TerrainType::Hill => Color::BROWN,
@@ -181,8 +201,6 @@ impl <'a> MapShader for WorldMapView<'a> {
                 }
             }
         }
-
-   
     }
 
     fn edge(&self, _: polymap::EdgeId) -> Color {

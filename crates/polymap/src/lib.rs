@@ -73,6 +73,7 @@ impl Cell {
 pub struct Corner {
     coords: (f64, f64),
     edges: Vec<EdgeId>,
+    neighbors: Vec<CornerId>,
 }
 
 impl Corner {
@@ -80,11 +81,14 @@ impl Corner {
         Self {
             coords: (location.0, location.1),
             edges: vec![edge],
+            neighbors: vec![] 
         }
     }
 
     pub fn x(&self) -> f64 { self.coords.0 }
     pub fn y(&self) -> f64 { self.coords.1 }
+
+    pub fn neighbors(&self) -> &[CornerId] { self.neighbors.as_slice() }
 }
 
 
@@ -144,7 +148,7 @@ impl PolyMap {
             geo::Polygon::new(geo::LineString::from(exterior), vec![])
         }).collect();
 
-        let (corners, edges, mut cells) = Self::build_elements(polygons);
+        let (mut corners, edges, mut cells) = Self::build_elements(polygons);
 
         // NOTE: Some indices point beyond the number of cells. These are meant
         // for the borders, I think. Skip them 
@@ -152,6 +156,18 @@ impl PolyMap {
             cell.neighbors = voronoi.neighbors[idx].iter().copied()
                 .filter(|idx| idx < &centers.len())
                 .map(|idx| CellId(idx)).collect();
+        }
+
+        // Use the corner edges to get their neighbors
+        for (idx, corner) in corners.iter_mut().enumerate() {
+            for edge in corner.edges.iter() {
+                let edge = &edges[edge.0];
+                if edge.endpoints.min.0 == idx {
+                    corner.neighbors.push(edge.endpoints.max)
+                } else {
+                    corner.neighbors.push(edge.endpoints.min);
+                }
+            }
         }
 
         let cell_quadtree = {
@@ -271,6 +287,10 @@ impl PolyMap {
 
     pub fn corners(&self) -> impl Iterator<Item=(CornerId, &Corner)> {
         self.corners.iter().enumerate().map(|(id, corner)| (CornerId(id), corner))
+    }
+
+    pub fn num_corners(&self) -> usize {
+        self.corners.len()
     }
 
     pub fn edge_endpoints_coords(&self, edge: &Edge) -> ((f64, f64), (f64, f64)) {

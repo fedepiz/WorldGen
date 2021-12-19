@@ -11,3 +11,5 @@ polymap = { path = "../polymap" }
 rand = { version = "*", features = ["small_rng"]}
 noise = "*"
 
+serde = "*"
+serde_derive = "*"

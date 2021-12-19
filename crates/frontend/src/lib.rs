@@ -1,16 +1,26 @@
 use polymap::painter::{Painter, Validation};
 use rand::Rng;
 use raylib::prelude::*;
-use worldgen::{ViewMode, WorldGenerator};
+use worldgen::{ViewMode, WorldGenerator, conf::WorldGenConf};
+use raylib::consts::KeyboardKey;
 
 pub fn main() {
     let mut seed = 27049319951022;
 
-    const WIDTH: i32 = 800;
-    const HEIGHT: i32 = 600;
+    const WIDTH: i32 = 1600;
+    const HEIGHT: i32 = 900;
+    
+    
+    let make_world_gen = || {
+        let file = std::fs::read_to_string("./config.toml").unwrap();
+        let conf: WorldGenConf = toml::from_str(file.as_str()).unwrap();
+        WorldGenerator::new(conf)
+    };
+    let mut world_gen = make_world_gen(); 
 
     let poly_map = polymap::PolyMap::new(WIDTH as usize, HEIGHT as usize, 8.0);
-    let mut world = WorldGenerator::new().generate(&poly_map, seed);
+
+    let mut world = world_gen.generate(&poly_map, seed);
 
     let mut world_view_mode = worldgen::ViewMode::Heightmap;
 
@@ -20,19 +30,25 @@ pub fn main() {
 
     let mut polymap_texture = Painter::new(&mut rl, &thread, &poly_map).unwrap();
 
-    const VIEW_MODES: &'static [(worldgen::ViewMode, raylib::consts::KeyboardKey)] = &[
-        (ViewMode::Heightmap, raylib::consts::KeyboardKey::KEY_ONE),
-        (ViewMode::Terrain, raylib::consts::KeyboardKey::KEY_TWO),
-        (ViewMode::Hydrology, raylib::consts::KeyboardKey::KEY_THREE)
+    const VIEW_MODES: &'static [(worldgen::ViewMode, KeyboardKey)] = &[
+        (ViewMode::Heightmap, KeyboardKey::KEY_ONE),
+        (ViewMode::Terrain, KeyboardKey::KEY_TWO),
+        (ViewMode::Hydrology, KeyboardKey::KEY_THREE)
     ];
 
     while !rl.window_should_close() {
-        if rl.is_key_down(raylib::consts::KeyboardKey::KEY_A) {
+        if rl.is_key_down(KeyboardKey::KEY_A) {
             polymap_texture.invalidate(Validation::Invalid);
         }
-        if rl.is_key_pressed(raylib::consts::KeyboardKey::KEY_G) {
+        if rl.is_key_pressed(KeyboardKey::KEY_G) {
             seed = rand::thread_rng().gen();
-            world = WorldGenerator::new().generate(&poly_map, seed);
+            world = world_gen.generate(&poly_map, seed);
+            polymap_texture.invalidate(Validation::Invalid)
+        }
+        if rl.is_key_pressed(KeyboardKey::KEY_R) {
+            world_gen = make_world_gen();
+            seed = rand::thread_rng().gen();
+            world = world_gen.generate(&poly_map, seed);
             polymap_texture.invalidate(Validation::Invalid)
         }
 

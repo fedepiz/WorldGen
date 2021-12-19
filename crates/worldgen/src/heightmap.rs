@@ -3,36 +3,26 @@ use polymap::compute::*;
 
 use rand::Rng;
 
-pub(super) struct HeightMapBuilder {
+use crate::generators;
+
+pub(crate) struct HeightMapBuilder {
     corners: CornerData<f64>,
 }
 
 impl HeightMapBuilder {
-    pub(super) fn new(poly_map: &PolyMap, default: f64) -> Self {
+    pub(crate) fn new(poly_map: &PolyMap, default: f64) -> Self {
         let corners = CornerData::for_each(&poly_map, |_, _| default);
         Self { corners }
     }
 
-    pub(super) fn perlin_noise(
+    pub(crate) fn perlin_noise(
         &mut self,
         poly_map: &PolyMap,
         perlin_freq: f64,
         intensity: f64,
         rng: &mut impl Rng,
     ) {
-        use noise::{NoiseFn, Perlin};
-
-        let perlin = Perlin::new();
-
-        let x_rand = rng.gen_range(0..100) as f64;
-        let y_rand = rng.gen_range(0..100) as f64;
-
-        self.corners.update_each(poly_map, |_, corner, h| {
-            let px = x_rand + corner.x() * perlin_freq;
-            let py = y_rand + corner.y() * perlin_freq;
-            let noise = perlin.get([px, py]);
-            *h += (noise + 1.0) / 2.0 * intensity;
-        })
+        generators::perlin_noise(&mut self.corners, poly_map, perlin_freq, intensity, rng)
     }
 
     pub(super) fn random_slope(&mut self, poly_map: &PolyMap, steepness: f64, rng: &mut impl Rng) {
@@ -82,7 +72,9 @@ impl HeightMapBuilder {
             })
     }
 
-    fn planchon_darboux(poly_map: &PolyMap, h: &mut CornerData<f64>, epsilon: f64) {
+    pub fn planchon_darboux(&mut self, poly_map: &PolyMap) {
+        let epsilon = 0.001;
+        let h = &mut self.corners;
         let mut new_h = CornerData::for_each(poly_map, |id, corner| {
             if corner.is_border() {
                 h[id]
@@ -117,10 +109,9 @@ impl HeightMapBuilder {
         std::mem::swap(&mut new_h, h);
     }
 
-    pub(super) fn build(mut self, poly_map: &PolyMap) -> HeightMap {     
-        
-        Self::planchon_darboux(poly_map, &mut self.corners, 0.001);
 
+    pub(super) fn build(self, poly_map: &PolyMap) -> HeightMap {     
+        
         let descent_vector = CornerData::for_each(poly_map, |id, corner| {
             let my_elevation = self.corners[id];
             let mut slope: Option<Slope> = None;

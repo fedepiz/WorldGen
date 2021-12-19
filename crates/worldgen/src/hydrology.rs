@@ -2,25 +2,47 @@ use std::{collections::HashSet};
 
 use polymap::*;
 use polymap::compute::*;
+use rand::Rng;
 
 use crate::{HeightMap, TerrainType};
+use crate::generators;
 
-pub struct Hydrology {
-    corner_flux: CornerData<f64>,
-    edge_flux: EdgeData<f64>,
-    rivers: Rivers
+pub(crate) struct HydrologyBuilder {
+    corner_rainfall: CornerData<f64>
 }
 
-impl Hydrology {
-    pub(super) fn new(poly_map: &PolyMap, height_map: &HeightMap, terrain:&CellData<TerrainType>, base_flow: f64) -> Hydrology {
+impl HydrologyBuilder {
+    pub fn new(poly_map: &PolyMap,) -> Self {
+        Self {
+            corner_rainfall: CornerData::for_each(poly_map, |_,_| 0.0)
+        }
+    }
+
+    pub fn height_scaled(&mut self, poly_map:&PolyMap, hm: &HeightMap, coeff: f64) {
+        self.corner_rainfall.update_each(poly_map, |id, _, h| {
+            let height = hm.corner_height(id);
+            *h += height * coeff 
+        })
+    }
+
+    pub(crate) fn perlin_noise(
+        &mut self,
+        poly_map: &PolyMap,
+        perlin_freq: f64,
+        intensity: f64,
+        rng: &mut impl Rng,
+    ) {
+        generators::perlin_noise(&mut self.corner_rainfall, poly_map, perlin_freq, intensity, rng)
+    }
+
+    pub fn build(mut self, poly_map: &PolyMap, height_map: &HeightMap, terrain:&CellData<TerrainType>, min_river_flux: f64) -> Hydrology {
+        let cell_rainfall = CellData::corner_average(poly_map, &self.corner_rainfall);
+
         let corner_flux = {
-            let mut corner_flux = CornerData::for_each(poly_map, |id, _| 
-                height_map.corner_height(id) * base_flow);
-          
-            corner_flux.flow(height_map.downhill_flow(),|x, y| {
+            self.corner_rainfall.flow(height_map.downhill_flow(),|x, y| {
                 *x += *y;
             });
-            corner_flux
+            self.corner_rainfall
         };
 
         let edge_flux= EdgeData::for_each(poly_map, |_, edge| {
@@ -34,10 +56,20 @@ impl Hydrology {
             flux
         });
 
-        let rivers = Rivers::new(poly_map, height_map, terrain, &edge_flux);
+        let rivers = Rivers::new(poly_map, height_map, terrain, &edge_flux, min_river_flux);
     
-        Hydrology { corner_flux, edge_flux, rivers }
+        Hydrology { corner_flux, edge_flux, cell_rainfall, rivers }
     }
+}
+
+pub struct Hydrology {
+    cell_rainfall: CellData<f64>,
+    corner_flux: CornerData<f64>,
+    edge_flux: EdgeData<f64>,
+    rivers: Rivers
+}
+
+impl Hydrology {
 
     pub fn corner_flux(&self, corner: CornerId) -> f64 {
         self.corner_flux[corner]
@@ -45,6 +77,10 @@ impl Hydrology {
 
     pub fn edge_flux(&self, edge: EdgeId) -> f64 {
         self.edge_flux[edge]
+    }
+
+    pub fn cell_rainfall(&self, cell: CellId) -> f64 {
+        self.cell_rainfall[cell]
     }
 
     pub fn rivers(&self) -> &Rivers {
@@ -57,15 +93,18 @@ pub struct Rivers {
     paths: Vec<RiverPath>
 }
 
-const MIN_RIVER: f64 = 75.0;
 
 impl Rivers {
-    fn new(poly_map: &PolyMap, height_map: &HeightMap, terrain:&CellData<TerrainType>, edge_flux:&EdgeData<f64>) -> Self {
+    fn new(poly_map: &PolyMap, 
+           height_map: &HeightMap, 
+           terrain:&CellData<TerrainType>, 
+           edge_flux:&EdgeData<f64>,
+           min_river_flux: f64) -> Self {
 
         let edge_is_river = EdgeData::from_cell_data(poly_map, &terrain,
             |id,_,terrain| {
                 let is_water = terrain.iter().any(|tt| tt.is_water());
-                !is_water && edge_flux[id] > MIN_RIVER
+                !is_water && edge_flux[id] > min_river_flux
             }
         );
 

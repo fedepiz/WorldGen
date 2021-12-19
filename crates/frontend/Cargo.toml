@@ -9,5 +9,9 @@ edition = "2021"
 raylib = { version = "*" }
 rand = { version = "*", features = ["small_rng"]}
 
+serde = "*"
+serde_derive = "*"
+toml = "*"
+
 polymap = { path = "../polymap" }
 worldgen = { path = "../worldgen"}

@@ -1,0 +1,33 @@
+[heightmap]
+# Removes all depression
+planchon_darboux = true
+
+[heightmap.slopes]
+number = 2
+intensity = 0.00025
+
+[heightmap.clumps]
+number = 5
+intensity = 0.00025
+
+[heightmap.depressions]
+number = 0
+intensity = 0.00025
+
+[heightmap.perlin1]
+frequency = 0.001
+intensity = 1.0
+
+[heightmap.perlin2]
+frequency = 0.01
+intensity = 0.2
+
+[hydrology]
+min_river_flux = 75.0
+
+[hydrology.rain]
+height_coeff = 1.0
+
+[hydrology.rain.perlin]
+frequency = 0.001
+intensity = 0.5

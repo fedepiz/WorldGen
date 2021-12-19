@@ -218,6 +218,7 @@ impl<T> CellData<T> {
         }
     }
 
+
     pub fn transform<U>(&self, mut f: impl FnMut(CellId, &T) -> U) -> CellData<U> {
         CellData {
             data: self

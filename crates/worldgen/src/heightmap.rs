@@ -168,15 +168,51 @@ impl HeightMapBuilder {
 }
 #[derive(Clone)]
 pub struct HeightMap {
-    pub corners: CornerData<f64>,
-    pub cells: CellData<f64>,
-    pub descent_vector: CornerData<Option<Slope>>,
-    pub downhill: Vec<CornerId>,
+    corners: CornerData<f64>,
+    cells: CellData<f64>,
+    descent_vector: CornerData<Option<Slope>>,
+    downhill: Vec<CornerId>,
 }
 
 impl HeightMap {
+    pub fn corner_height(&self,id: CornerId) -> f64 { self.corners[id] }
+
+    pub fn cell_height(&self, id: CellId) -> f64 { self.cells[id] }
+
     pub fn is_descent(&self, top: CornerId, bottom:CornerId) -> bool {
         self.descent_vector[top].as_ref().map(|x| x.towards == bottom).unwrap_or(false)
+    }
+
+    pub fn descent_vector(&self, id:CornerId) -> Option<&Slope> {
+        self.descent_vector[id].as_ref()
+    }
+
+    pub fn edge_high_corner(&self, edge: &Edge) -> Option<CornerId> {
+        let s = self.corners[edge.start()];
+        let e = self.corners[edge.end()];
+        if s > e {
+            Some(edge.start())
+        } else if e > s {
+            Some(edge.end())
+        } else {
+            None
+        }
+    }
+
+    pub fn edge_low_corner(&self, edge: &Edge) -> Option<CornerId> {
+        let s = self.corners[edge.start()];
+        let e = self.corners[edge.end()];
+        if s < e {
+            Some(edge.start())
+        } else if e < s {
+            Some(edge.end())
+        } else {
+            None
+        }
+    }
+
+    pub fn downhill(&self) -> impl Iterator<Item=CornerId> + '_ {
+        self.downhill.iter().copied()
     }
 }
 

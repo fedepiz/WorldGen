@@ -101,6 +101,14 @@ impl Corner {
         self.neighbors.as_slice()
     }
 
+    pub fn edges(&self) -> &[EdgeId] { 
+        self.edges.as_slice()
+    }
+
+    pub fn other_edge(&self, id: EdgeId) -> Option<EdgeId> {
+        self.edges().iter().find(|&&other| other != id ).copied()
+    }
+
     pub fn is_border(&self) -> bool { self.is_border }
 }
 
@@ -162,7 +170,7 @@ impl PolyMap {
             .collect();
 
         let voronoi = voronator::VoronoiDiagram::<voronator::delaunator::Point>::from_tuple(
-            &(-1.0, -1.0),
+            &(0.0, 0.0),
             &(width as f64, height as f64),
             &centers,
         )

@@ -187,6 +187,11 @@ pub struct CellData<T> {
 }
 
 impl<T> CellData<T> {
+
+    pub fn for_each(poly_map: &PolyMap, mut f: impl FnMut(CellId, &Cell) -> T) -> Self {
+        Self { data: poly_map.cells().map(|(id, cell)| f(id, cell)).collect() }
+    }
+
     pub fn from_corners_data<U>(
         poly_map: &PolyMap,
         corners_data: &CornerData<U>,

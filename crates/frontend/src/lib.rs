@@ -49,7 +49,7 @@ pub fn main() {
         if rl.is_mouse_button_pressed(MouseButton::MOUSE_LEFT_BUTTON) {
             let mouse_pos = rl.get_mouse_position();
             if let Some(cell_id) = poly_map.polygon_at(mouse_pos.x, mouse_pos.y) {
-                println!("{:?}:{}", cell_id, world.heightmap.cells[cell_id]);
+                println!("{:?}:{}", cell_id, world.heightmap.cell_height(cell_id));
             }
         }
 

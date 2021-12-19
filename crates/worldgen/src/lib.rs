@@ -59,9 +59,9 @@ impl WorldGenerator {
             hm.build(&poly_map)
         };
 
-        let terrain = heightmap
-            .cells
-            .transform(|_, &x| TerrainType::from_height(x));
+        let terrain = CellData::for_each(
+            poly_map, |id, _| TerrainType::from_height(heightmap.cell_height(id))
+        );
     
 
         let rivers = Hydrology::new(poly_map, &heightmap, &terrain, RIVER_BASE_FLOW);
@@ -130,7 +130,7 @@ impl<'a> MapShader for WorldMapView<'a> {
     fn cell(&self, id: CellId) -> Color {
         match self.mode {
             ViewMode::Heightmap => {
-                let height = self.world_map.heightmap.cells[id];
+                let height = self.world_map.heightmap.cell_height(id);
                 let intensity = (255.0 * height).max(0.0).min(255.0).round() as u8;
                 Color::new(intensity, intensity, intensity, 255)
             }
@@ -149,14 +149,14 @@ impl<'a> MapShader for WorldMapView<'a> {
         match self.mode {
             ViewMode::Heightmap => Some(Color::BLACK),
             ViewMode::Terrain => {
-                if !self.world_map.hydrology.is_river[id] {
+                if !self.world_map.hydrology.is_river_segment(id) {
                     return None
                 }
-                let flow = self.world_map.hydrology.edge_flux[id];
+                let flow = self.world_map.hydrology.edge_flux(id);
                 Some(Color::new(0, 0, 255, flow.round().min(255.0) as u8))
             }
             ViewMode::Hydrology => {                
-                let flow = self.world_map.hydrology.edge_flux[id];
+                let flow = self.world_map.hydrology.edge_flux(id);
                 
                 Some(Color::new(0, 0, 255, flow.round().min(255.0) as u8))
             }
@@ -167,14 +167,14 @@ impl<'a> MapShader for WorldMapView<'a> {
         match self.mode {
             ViewMode::Heightmap => true,
             ViewMode::Terrain => false,
-            ViewMode::Hydrology => false,
+            ViewMode::Hydrology => true,
         }
     }
     
     fn corner(&self, id: CornerId, _:&Corner) -> Option<Color> {
         match self.mode {
             ViewMode::Heightmap => {
-                let has_slope = self.world_map.heightmap.descent_vector[id].is_some();
+                let has_slope = self.world_map.heightmap.descent_vector(id).is_some();
                 if !has_slope {
                     Some(Color::RED)
                 } else {
@@ -182,7 +182,13 @@ impl<'a> MapShader for WorldMapView<'a> {
                 }
             }
             ViewMode::Terrain => None,
-            ViewMode::Hydrology => None,
+            ViewMode::Hydrology => {
+                if self.world_map.hydrology.is_river_source(id) {
+                    Some(Color::RED)
+                } else {
+                    None
+                }
+            },
         }
     }
 }

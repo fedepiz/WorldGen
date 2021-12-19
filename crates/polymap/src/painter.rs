@@ -146,7 +146,7 @@ impl Painter {
     fn draw_corners(ctx: &mut Handle, poly_map: &PolyMap, shader: &impl MapShader) {
         for (id, corner) in poly_map.corners() {
             if let Some(color) = shader.corner(id, corner) {
-                let tile_halfsize = 0.5;
+                let tile_halfsize = 2.0;
 
                 let half_size = Vector2::zero() + tile_halfsize;
                 let position = Vector2::new(

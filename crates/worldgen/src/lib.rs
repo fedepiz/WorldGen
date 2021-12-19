@@ -96,7 +96,7 @@ impl TerrainType {
         LEVELS
             .iter()
             .find_map(|&(tt, x)| if height <= x { Some(tt) } else { None })
-            .expect("Invalid terrain type, heightmap out of bounds")
+            .unwrap_or_else(|| TerrainType::DeepWater)
     }
 
     fn is_water(&self) -> bool {
@@ -171,11 +171,11 @@ impl<'a> MapShader for WorldMapView<'a> {
         }
     }
     
-    fn corner(&self, id: CornerId, _:&Corner) -> Option<Color> {
+    fn corner(&self, id: CornerId, corner:&Corner) -> Option<Color> {
         match self.mode {
             ViewMode::Heightmap => {
                 let has_slope = self.world_map.heightmap.descent_vector(id).is_some();
-                if !has_slope {
+                if !has_slope && !corner.is_border() {
                     Some(Color::RED)
                 } else {
                     None

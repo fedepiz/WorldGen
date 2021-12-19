@@ -1,4 +1,5 @@
 use super::*;
+use std::collections::HashSet;
 
 #[derive(Default)]
 pub struct ElementSet {

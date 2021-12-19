@@ -4,7 +4,7 @@ pub mod map_shader;
 pub mod painter;
 
 use geo::{contains::Contains, coords_iter::CoordsIter, Polygon};
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap};
 
 #[derive(Clone, Copy, Debug, PartialOrd)]
 struct Location(f64, f64);
@@ -71,6 +71,12 @@ impl Cell {
     pub fn neighbors(&self) -> &[CellId] {
         self.neighbors.as_slice()
     }
+
+    fn fix(&mut self) {
+        self.corners.sort();
+        self.neighbors.sort();
+        self.edges.sort();
+    }
 }
 
 pub struct Corner {
@@ -110,6 +116,11 @@ impl Corner {
     }
 
     pub fn is_border(&self) -> bool { self.is_border }
+
+    fn fix(&mut self) {
+        self.neighbors.sort();
+        self.edges.sort();
+    }
 }
 
 pub struct Edge {
@@ -126,13 +137,17 @@ impl Edge {
     }
 
     fn add_owner(&mut self, cell: CellId) {
-        self.cells.push(cell)
+        self.cells.push(cell);
     }
     
     pub fn start(&self) -> CornerId { self.endpoints.min }
     pub fn end(&self) -> CornerId { self.endpoints.max }
 
     pub fn cells(&self) -> &[CellId] { self.cells.as_slice() }
+
+    fn fix(&mut self) {
+        self.cells.sort();
+    }
 }
 
 #[derive(Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Hash)]
@@ -176,6 +191,7 @@ impl PolyMap {
         )
         .expect("Failed to build voronoi diagram");
 
+        
         let polygons: Vec<_> = voronoi
             .cells()
             .iter()
@@ -185,7 +201,8 @@ impl PolyMap {
             })
             .collect();
 
-        let (mut corners, edges, mut cells) = Self::build_elements(polygons, width as f64, height as f64);
+
+        let (mut corners, mut edges, mut cells) = Self::build_elements(polygons, width as f64, height as f64);
 
         // NOTE: Some indices point beyond the number of cells. These are meant
         // for the borders, I think. Skip them
@@ -223,6 +240,11 @@ impl PolyMap {
             cell_quadtree
         };
 
+        corners.iter_mut().for_each(|x| x.fix());
+        edges.iter_mut().for_each(|x| x.fix());
+        cells.iter_mut().for_each(|x| x.fix());
+
+
         PolyMap {
             width,
             height,
@@ -249,6 +271,7 @@ impl PolyMap {
                     Some(&id) => {
                         let corner = &mut corners[id.0];
                         corner.edges.push(edge_id);
+                        corner.edges.sort();
                         id
                     }
                     None => {
@@ -296,6 +319,7 @@ impl PolyMap {
             }
             cells.push(Cell::new(polygon, cell_edges, cell_corners))
         }
+
         (corners, edges, cells)
     }
 

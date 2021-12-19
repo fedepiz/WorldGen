@@ -14,6 +14,7 @@ pub fn main() {
 
     let mut world_view_mode = worldgen::ViewMode::Heightmap;
 
+    raylib::core::logging::set_trace_log(raylib::consts::TraceLogLevel::LOG_NONE);
     let (mut rl, thread) = raylib::init().size(WIDTH, HEIGHT).title("Hello, World").build();
     rl.set_target_fps(60);
 

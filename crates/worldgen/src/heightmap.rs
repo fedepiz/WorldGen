@@ -113,6 +113,7 @@ impl HeightMapBuilder {
             }
         }
 
+
         std::mem::swap(&mut new_h, h);
     }
 
@@ -179,6 +180,7 @@ impl HeightMap {
 
     pub fn cell_height(&self, id: CellId) -> f64 { self.cells[id] }
 
+    /// True if there is a slope going from a to b
     pub fn is_descent(&self, top: CornerId, bottom:CornerId) -> bool {
         self.descent_vector[top].as_ref().map(|x| x.towards == bottom).unwrap_or(false)
     }

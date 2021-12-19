@@ -1,5 +1,7 @@
 use super::*;
 use rand::Rng;
+use std::collections::HashSet;
+
 pub struct CornerPicker;
 
 impl CornerPicker {
@@ -69,10 +71,11 @@ impl<T> CornerData<T> {
 
     pub fn ordered_by(&self, mut compare: impl FnMut(&T, &T) -> std::cmp::Ordering) -> Vec<CornerId> {
         let mut temporary: Vec<_> = (0..self.data.len()).map(CornerId).collect();
-        temporary.sort_unstable_by(|&id1, &id2| {
+        temporary.sort_by(|&id1, &id2| {
             let t1 = &self.data[id1.0];
             let t2 = &self.data[id2.0];
-            compare(t1, t2)
+            let ord = compare(t1, t2);
+            ord.then_with(|| id1.cmp(&id2))
         });
         temporary
     }

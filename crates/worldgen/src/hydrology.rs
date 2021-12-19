@@ -5,11 +5,51 @@ use polymap::compute::*;
 
 use crate::{HeightMap, TerrainType};
 
-
 pub struct Hydrology {
     corner_flux: CornerData<f64>,
     edge_flux: EdgeData<f64>,
     rivers: Rivers
+}
+
+impl Hydrology {
+    pub(super) fn new(poly_map: &PolyMap, height_map: &HeightMap, terrain:&CellData<TerrainType>, base_flow: f64) -> Hydrology {
+        let corner_flux = {
+            let mut corner_flux = CornerData::for_each(poly_map, |id, _| 
+                height_map.corner_height(id) * base_flow);
+          
+            corner_flux.flow(height_map.downhill_flow(),|x, y| {
+                *x += *y;
+            });
+            corner_flux
+        };
+
+        let edge_flux= EdgeData::for_each(poly_map, |_, edge| {
+            let mut flux = 0.0;
+            if height_map.is_descent(edge.start(), edge.end()) {
+                flux += corner_flux[edge.start()]
+            }
+            if height_map.is_descent(edge.end(), edge.start()) {
+                flux += corner_flux[edge.end()]
+            }
+            flux
+        });
+
+        let rivers = Rivers::new(poly_map, height_map, terrain, &edge_flux);
+    
+        Hydrology { corner_flux, edge_flux, rivers }
+    }
+
+    pub fn corner_flux(&self, corner: CornerId) -> f64 {
+        self.corner_flux[corner]
+    }
+
+    pub fn edge_flux(&self, edge: EdgeId) -> f64 {
+        self.edge_flux[edge]
+    }
+
+    pub fn rivers(&self) -> &Rivers {
+        &self.rivers
+    }
 }
 
 pub struct Rivers {
@@ -82,48 +122,4 @@ impl RiverPath {
     pub fn source(&self) -> CornerId { *self.path.first().unwrap() }
     pub fn sink(&self) -> CornerId { *self.path.last().unwrap() }
     pub fn corners(&self) -> &[CornerId] { &self.path }
-}
-
-impl Hydrology {
-    pub(super) fn new(poly_map: &PolyMap, height_map: &HeightMap, terrain:&CellData<TerrainType>, base_flow: f64) -> Hydrology {
-        let corner_flux = {
-            let mut corner_flux = CornerData::for_each(poly_map, |id, _| 
-                height_map.corner_height(id) * base_flow);
-
-          
-            corner_flux.flow(height_map.downhill_flow(),|x, y| {
-                *x += *y;
-            });
-            corner_flux
-        };
-
-        let edge_flux= EdgeData::for_each(poly_map, |_, edge| {
-            let mut flux = 0.0;
-            if height_map.is_descent(edge.start(), edge.end()) {
-                flux += corner_flux[edge.start()]
-            }
-            if height_map.is_descent(edge.end(), edge.start()) {
-                flux += corner_flux[edge.end()]
-            }
-            flux
-        });
-
-
-
-        let rivers = Rivers::new(poly_map, height_map, terrain, &edge_flux);
-    
-        Hydrology { corner_flux, edge_flux, rivers }
-    }
-
-    pub fn corner_flux(&self, corner: CornerId) -> f64 {
-        self.corner_flux[corner]
-    }
-
-    pub fn edge_flux(&self, edge: EdgeId) -> f64 {
-        self.edge_flux[edge]
-    }
-
-    pub fn rivers(&self) -> &Rivers {
-        &self.rivers
-    }
 }

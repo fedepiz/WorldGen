@@ -364,6 +364,12 @@ impl PolyMap {
         (c1.coords, c2.coords)
     }
 
+    pub fn edge_between(&self, c1: CornerId, c2: CornerId) -> Option<EdgeId> {
+        let op = OrderedPair::new(c1, c2);
+        self.corners[op.min.0].edges().iter().copied()
+            .find(|&edge_id| self.edges[edge_id.0].endpoints.max == op.max)
+    }
+
     pub fn corner(&self, id: CornerId) -> &Corner {
         &self.corners[id.0]
     }

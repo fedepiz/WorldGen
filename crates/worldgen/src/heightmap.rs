@@ -211,8 +211,39 @@ impl HeightMap {
         }
     }
 
-    pub fn downhill(&self) -> impl Iterator<Item=CornerId> + '_ {
+
+    /// Returns an iterator over pairs of corners a -> b, which follow the downhill slope 
+    /// of each vector. The paths are not joind though
+    pub(crate) fn downhill_flow(&self) -> impl Iterator<Item=(CornerId, CornerId)> + '_ {
         self.downhill.iter().copied()
+            .filter_map(|from| {
+                self.descent_vector(from).map(|slope| (from, slope.towards))
+             })
+    }
+    
+    // Starting from the given corner, walks downhill, recording all corner touched
+    pub (crate) fn downhill_path(&self, corner: CornerId) -> DownhillPath {
+        DownhillPath { node: corner, hm: self }
+    }
+}
+
+pub (crate) struct DownhillPath<'a> {
+    node: CornerId,
+    hm: &'a HeightMap
+}
+
+impl <'a> Iterator for DownhillPath<'a> {
+    type Item = CornerId;
+
+    fn next(&mut self) -> Option<CornerId> {
+        let slope = self.hm.descent_vector(self.node);
+        if let Some(slope) = slope {
+            let mut next = slope.towards;
+            std::mem::swap(&mut self.node, &mut next);
+            Some(next)
+        } else {
+            None
+        }
     }
 }
 

@@ -149,7 +149,7 @@ impl<'a> MapShader for WorldMapView<'a> {
         match self.mode {
             ViewMode::Heightmap => Some(Color::BLACK),
             ViewMode::Terrain => {
-                if !self.world_map.hydrology.is_river_segment(id) {
+                if !self.world_map.hydrology.rivers().is_segment(id) {
                     return None
                 }
                 let flow = self.world_map.hydrology.edge_flux(id);
@@ -183,7 +183,11 @@ impl<'a> MapShader for WorldMapView<'a> {
             }
             ViewMode::Terrain => None,
             ViewMode::Hydrology => {
-                if self.world_map.hydrology.is_river_source(id) {
+                let rivers = self.world_map.hydrology.rivers();
+
+                if rivers.is_source(id) {
+                    Some(Color::GREEN)
+                } else if rivers.is_sink(id) {
                     Some(Color::RED)
                 } else {
                     None

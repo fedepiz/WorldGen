@@ -17,11 +17,35 @@ pub use hydrology::Hydrology;
 
 use heightmap::*;
 
-use generators::GridGenerator;
+use generators::{GridGenerator, PerlinField, Slope, Clump};
+use thermology::{ThermologyBuilder, Thermolgoy};
 
 pub struct WorldMap {
-    pub heightmap: HeightMap,
+    heightmap: HeightMap,
+    terrain: CellData<TerrainType>,
     hydrology: Hydrology,
+    thermology: Thermolgoy,
+}
+
+impl WorldMap {
+    pub fn heightmap(&self) -> &HeightMap { &self.heightmap }
+
+    pub fn reflow_rivers(&mut self, poly_map:&PolyMap) { 
+        self.update_heightmap(poly_map, |hmb| {
+            hmb.add_field(poly_map, PerlinField::new(0.0, 0.0, 0.001), 0.2);
+            hmb.planchon_darboux(poly_map);
+        })
+    }
+
+    fn update_heightmap(&mut self, poly_map:&PolyMap, f: impl FnOnce(&mut HeightMapBuilder)) {
+        let mut hmb = self.heightmap.make_builder();
+        f(&mut hmb);
+        self.heightmap = hmb.build(poly_map);
+        self.terrain = CellData::for_each(poly_map, |id, _| {
+            TerrainType::from_height(self.heightmap.cell_height(id))
+        });
+        self.hydrology.reflow_rivers(poly_map, &self.heightmap, &self.terrain);
+    }
 }
 
 pub struct WorldGenerator {
@@ -42,27 +66,29 @@ impl WorldGenerator {
             let mut hm = HeightMapBuilder::new(&poly_map, 0.);
 
             for _ in 0..conf.slopes.number {
-                hm.random_slope(poly_map, conf.slopes.intensity, rng);
+                let slope = Slope::with_rng(poly_map.width() as f64, poly_map.height() as f64, rng);
+                hm.add_field(poly_map, slope, conf.slopes.intensity);
             }
-            hm.perlin_noise(
-                poly_map,
-                conf.perlin1.frequency,
-                conf.perlin1.intensity,
-                rng,
-            );
-            hm.perlin_noise(
-                poly_map,
-                conf.perlin2.frequency,
-                conf.perlin2.intensity,
-                rng,
-            );
+
+            hm.add_field(poly_map, PerlinField::with_rng(conf.perlin1.frequency, rng), conf.perlin1.intensity);
+            hm.add_field(poly_map, PerlinField::with_rng(conf.perlin2.frequency, rng), conf.perlin2.intensity);
 
             for _ in 0..conf.clumps.number {
-                hm.clump(poly_map, conf.clumps.intensity, 0.90, 0.05, rng)
+                let clump = Clump::with_rng(
+                    poly_map.width() as f64, poly_map.height() as f64, 
+                    conf.clumps.intensity, 
+                    0.90, rng
+                );
+                hm.add_field(poly_map, clump, 1.0);
             }
 
             for _ in 0..conf.depressions.number {
-                hm.clump(poly_map, -conf.depressions.intensity, 0.96, 0.1, rng);
+                let clump = Clump::with_rng(
+                    poly_map.width() as f64, poly_map.height() as f64, 
+                    -conf.depressions.intensity, 
+                    0.90, rng
+                );
+                hm.add_field(poly_map, clump, 1.0);            
             }
 
             let num_relax = 3;
@@ -74,7 +100,6 @@ impl WorldGenerator {
                 hm.planchon_darboux(poly_map)
             }
 
-            hm.normalize();
             hm.build(&poly_map)
         };
 
@@ -85,20 +110,25 @@ impl WorldGenerator {
         let hydrology = {
             let conf = &self.conf.hydrology;
             let mut hb = HydrologyBuilder::new(&poly_map);
-            hb.height_scaled(poly_map, &heightmap, conf.rain.height_coeff);
-            hb.perlin_noise(
-                poly_map,
-                conf.rain.perlin.frequency,
-                conf.rain.perlin.intensity,
-                rng,
-            );
+            hb.scale_by_height(poly_map, &heightmap, conf.rain.height_coeff);
+
+            hb.add_field(poly_map, PerlinField::with_rng(conf.rain.perlin.frequency, rng), conf.rain.perlin.intensity);
 
             hb.build(poly_map, &heightmap, &terrain, conf.min_river_flux)
         };
 
+        let thermology = {
+            let mut tb = ThermologyBuilder::new(&poly_map);
+            tb.add_field(poly_map, PerlinField::with_rng(0.001, rng), 100.0);
+            tb.build(poly_map, &heightmap, &terrain)
+        };
+
+
         WorldMap {
             heightmap,
+            terrain,
             hydrology,
+            thermology,
         }
     }
 }
@@ -171,6 +201,7 @@ pub enum ViewMode {
     Terrain,
     Heightmap,
     Hydrology,
+    Thermology,
 }
 
 pub struct WorldMapView<'a> {
@@ -211,6 +242,12 @@ impl<'a> MapShader for WorldMapView<'a> {
                 let rainfall = 100.0 * self.world_map.hydrology.cell_rainfall(id);
                 Color::new(0, 0, 255, rainfall.round().min(255.0) as u8)
             }
+            ViewMode::Thermology => {
+                let temperature = self.world_map.thermology.cell_temperature(id);
+
+                let t_value = (temperature/100.0).max(0.0).min(1.0);
+                interpolate_three_colors(Color::DARKBLUE, Color::YELLOW, Color::RED, t_value)
+            }
         }
     }
 
@@ -229,6 +266,8 @@ impl<'a> MapShader for WorldMapView<'a> {
 
                 Some(Color::new(0, 0, 255, flow.round().min(255.0) as u8))
             }
+            ViewMode::Thermology => None
+            
         }
     }
 
@@ -237,6 +276,7 @@ impl<'a> MapShader for WorldMapView<'a> {
             ViewMode::Heightmap => true,
             ViewMode::Terrain => false,
             ViewMode::Hydrology => true,
+            ViewMode::Thermology => false,
         }
     }
 
@@ -262,7 +302,16 @@ impl<'a> MapShader for WorldMapView<'a> {
                     None
                 }
             }
+            ViewMode::Thermology => None,
         }
+    }
+}
+
+fn interpolate_three_colors(c1: Color, c2: Color, c3: Color, t: f64) -> Color {
+    if t <= 0.5 {
+        interpolate_colors(c1, c2, 2. * t)
+    } else {
+        interpolate_colors(c2, c3, 2. * (t - 0.5))
     }
 }
 

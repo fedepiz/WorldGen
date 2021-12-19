@@ -36,6 +36,7 @@ pub fn main() {
         (ViewMode::Heightmap, KeyboardKey::KEY_ONE),
         (ViewMode::Terrain, KeyboardKey::KEY_TWO),
         (ViewMode::Hydrology, KeyboardKey::KEY_THREE),
+        (ViewMode::Thermology, KeyboardKey::KEY_FOUR),
     ];
 
     while !rl.window_should_close() {
@@ -53,6 +54,11 @@ pub fn main() {
             world = world_gen.generate(&poly_map, seed);
             polymap_texture.invalidate(Validation::Invalid)
         }
+        if rl.is_key_pressed(KeyboardKey::KEY_F) {
+            world.reflow_rivers(&poly_map);
+            polymap_texture.invalidate(Validation::Invalid)
+        }
+
 
         if let Some(mode) = VIEW_MODES.iter().find_map(|(mode, key)| {
             if rl.is_key_pressed(*key) && &world_view_mode != mode {
@@ -68,7 +74,7 @@ pub fn main() {
         if rl.is_mouse_button_pressed(MouseButton::MOUSE_LEFT_BUTTON) {
             let mouse_pos = rl.get_mouse_position();
             if let Some(cell_id) = poly_map.polygon_at(mouse_pos.x, mouse_pos.y) {
-                println!("{:?}:{}", cell_id, world.heightmap.cell_height(cell_id));
+                println!("{:?}:{}", cell_id, world.heightmap().cell_height(cell_id));
             }
         }
 

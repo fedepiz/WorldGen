@@ -8,6 +8,8 @@ pub(crate) struct HeightMapBuilder {
 }
 
 impl GridGenerator for HeightMapBuilder {
+    fn grid(&self) -> &CornerData<f64> { &self.corners }
+
     fn grid_mut(&mut self) -> &mut CornerData<f64> { &mut self.corners }
 }
 
@@ -57,7 +59,9 @@ impl HeightMapBuilder {
         std::mem::swap(&mut new_h, h);
     }
 
-    pub(super) fn build(self, poly_map: &PolyMap) -> HeightMap {
+    pub(super) fn build(mut self, poly_map: &PolyMap) -> HeightMap {
+        self.normalize();
+        
         let descent_vector = CornerData::for_each(poly_map, |id, corner| {
             let my_elevation = self.corners[id];
             let mut slope: Option<Slope> = None;
@@ -171,6 +175,12 @@ impl HeightMap {
         DownhillPath {
             node: corner,
             hm: self,
+        }
+    }
+
+    pub(crate) fn make_builder(&self) -> HeightMapBuilder {
+        HeightMapBuilder {
+            corners: self.corners.clone()
         }
     }
 }

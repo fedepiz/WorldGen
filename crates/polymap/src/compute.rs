@@ -16,6 +16,11 @@ pub struct CornerData<T> {
 }
 
 impl<T> CornerData<T> {
+
+    pub fn empty_shell() -> Self {
+        Self { data: vec![] }
+    }
+
     pub fn for_each(poly_map: &PolyMap, mut f: impl FnMut(CornerId, &Corner) -> T) -> Self {
         Self {
             data: poly_map.corners().map(|(id, c)| f(id, c)).collect(),

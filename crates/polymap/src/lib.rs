@@ -111,6 +111,10 @@ impl Corner {
         self.edges.as_slice()
     }
 
+    pub fn cells<'a>(&'a self, poly_map:&'a PolyMap) -> impl Iterator<Item=CellId> + 'a {
+        self.edges().iter().flat_map(|&edge| poly_map.edge(edge).cells().iter().copied())
+    }
+
     pub fn other_edge(&self, id: EdgeId) -> Option<EdgeId> {
         self.edges().iter().find(|&&other| other != id).copied()
     }

@@ -17,7 +17,7 @@ impl HydrologyBuilder {
         }
     }
 
-    pub fn height_scaled(&mut self, poly_map: &PolyMap, hm: &HeightMap, coeff: f64) {
+    pub fn scale_by_height(&mut self, poly_map: &PolyMap, hm: &HeightMap, coeff: f64) {
         self.corner_rainfall.update_each(poly_map, |id, _, h| {
             let height = hm.corner_height(id);
             *h += height * coeff
@@ -25,20 +25,47 @@ impl HydrologyBuilder {
     }
 
     pub fn build(
-        mut self,
+        self,
         poly_map: &PolyMap,
         height_map: &HeightMap,
         terrain: &CellData<TerrainType>,
         min_river_flux: f64,
     ) -> Hydrology {
-        let cell_rainfall = CellData::corner_average(poly_map, &self.corner_rainfall);
+       Hydrology::new(self.corner_rainfall, poly_map, height_map, terrain, min_river_flux)
+    }
+}
+
+impl GridGenerator for HydrologyBuilder {
+    fn grid(&self) -> &CornerData<f64> { &self.corner_rainfall }
+
+    fn grid_mut(&mut self) -> &mut CornerData<f64> { &mut self.corner_rainfall }
+}
+
+
+pub struct Hydrology {
+    min_river_flux: f64,
+    corner_rainfall: CornerData<f64>,
+    cell_rainfall: CellData<f64>,
+    corner_flux: CornerData<f64>,
+    edge_flux: EdgeData<f64>,
+    rivers: Rivers,
+}
+
+impl Hydrology {
+    fn new(corner_rainfall: CornerData<f64>,
+           poly_map: &PolyMap,
+           height_map: &HeightMap,
+           terrain: &CellData<TerrainType>,
+           min_river_flux: f64,) -> Self {
+        let cell_rainfall = CellData::corner_average(poly_map, &corner_rainfall);
 
         let corner_flux = {
-            self.corner_rainfall
+            let mut corner_flux = corner_rainfall.clone();
+            corner_flux
                 .flow(height_map.downhill_flow(), |x, y| {
                     *x += *y;
                 });
-            self.corner_rainfall
+            corner_flux
         };
 
         let edge_flux = EdgeData::for_each(poly_map, |_, edge| {
@@ -55,27 +82,15 @@ impl HydrologyBuilder {
         let rivers = Rivers::new(poly_map, height_map, terrain, &edge_flux, min_river_flux);
 
         Hydrology {
+            min_river_flux,
+            corner_rainfall,
             corner_flux,
             edge_flux,
             cell_rainfall,
             rivers,
         }
     }
-}
 
-impl GridGenerator for HydrologyBuilder {
-    fn grid_mut(&mut self) -> &mut CornerData<f64> { &mut self.corner_rainfall }
-}
-
-
-pub struct Hydrology {
-    cell_rainfall: CellData<f64>,
-    corner_flux: CornerData<f64>,
-    edge_flux: EdgeData<f64>,
-    rivers: Rivers,
-}
-
-impl Hydrology {
     pub fn corner_flux(&self, corner: CornerId) -> f64 {
         self.corner_flux[corner]
     }
@@ -90,6 +105,11 @@ impl Hydrology {
 
     pub fn rivers(&self) -> &Rivers {
         &self.rivers
+    }
+
+    pub(crate) fn reflow_rivers(&mut self, poly_map: &PolyMap, height_map: &HeightMap, terrain: &CellData<TerrainType>) { 
+        let corner_rainfall = std::mem::replace(&mut self.corner_rainfall, CornerData::empty_shell());
+        *self = Self::new(corner_rainfall, poly_map, height_map, terrain, self.min_river_flux)
     }
 }
 

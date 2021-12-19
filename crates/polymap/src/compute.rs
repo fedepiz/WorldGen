@@ -66,6 +66,16 @@ impl<T> CornerData<T> {
             std::mem::swap(&mut queue, &mut next_iteration)
         }
     }
+
+    pub fn ordered_by(&self, mut compare: impl FnMut(&T, &T) -> std::cmp::Ordering) -> Vec<CornerId> {
+        let mut temporary: Vec<_> = (0..self.data.len()).map(CornerId).collect();
+        temporary.sort_unstable_by(|&id1, &id2| {
+            let t1 = &self.data[id1.0];
+            let t2 = &self.data[id2.0];
+            compare(t1, t2)
+        });
+        temporary
+    }
 }
 
 impl<T: Clone> CornerData<T> {
@@ -78,6 +88,18 @@ impl<T: Clone> CornerData<T> {
                 buf.push(&read_data[neighbor.0]);
             }
             f(&mut self.data[id.0], buf.as_slice())
+        }
+    }
+
+    pub fn flow(
+        &mut self,
+        order: impl Iterator<Item = (CornerId, CornerId)>,
+        mut update: impl FnMut(&mut T, &T),
+    ) {
+        for (from, to) in order {
+            let source = &self.data[from.0].clone();
+            let value = &mut self.data[to.0];
+            update(value, source)
         }
     }
 }
@@ -93,6 +115,71 @@ impl<T> std::ops::IndexMut<CornerId> for CornerData<T> {
         &mut self.data[index.0]
     }
 }
+
+#[derive(Clone)]
+pub struct EdgeData<T> {
+    pub data: Vec<T>
+}
+
+impl <T> EdgeData<T> {
+
+    pub fn for_each(
+        poly_map: &PolyMap,
+        mut combine: impl FnMut(EdgeId, &Edge) -> T,
+    ) -> Self {
+        let data:Vec<_> = poly_map.edges().map(|(id, edge)| {
+            combine(id, edge)
+        }).collect();
+
+        Self { data }
+    }
+
+    
+    pub fn from_corners_data<U>(
+        poly_map: &PolyMap,
+        corners_data: &CornerData<U>,
+        mut combine: impl FnMut(EdgeId, &Edge, &U, &U) -> T,
+    ) -> Self {
+        let data:Vec<_> = poly_map.edges().map(|(id, edge)| {
+            let c1 = &corners_data[edge.endpoints.min];
+            let c2 = &corners_data[edge.endpoints.max];
+            combine(id, edge, c1, c2)
+        }).collect();
+
+        Self { data }
+    }
+
+    pub fn from_cell_data<U>(
+        poly_map: &PolyMap,
+        cell_data: &CellData<U>,
+        mut combine: impl FnMut(EdgeId, &Edge, &[&U]) -> T,
+    ) -> Self {
+        let mut buf = vec![];
+        let data:Vec<_> = poly_map.edges().map(|(id, edge)| {
+            buf.clear();
+            for &cell in edge.cells() {
+                buf.push(&cell_data[cell]);
+            }
+
+            combine(id, edge, buf.as_slice())
+        }).collect();
+
+        Self { data }
+    }
+}
+
+impl<T> std::ops::Index<EdgeId> for EdgeData<T> {
+    type Output = T;
+    fn index(&self, index: EdgeId) -> &Self::Output {
+        &self.data[index.0]
+    }
+}
+impl<T> std::ops::IndexMut<EdgeId> for EdgeData<T> {
+    fn index_mut(&mut self, index: EdgeId) -> &mut Self::Output {
+        &mut self.data[index.0]
+    }
+}
+
 
 #[derive(Clone)]
 pub struct CellData<T> {

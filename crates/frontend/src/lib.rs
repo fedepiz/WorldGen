@@ -6,12 +6,15 @@ use worldgen::{ViewMode, WorldGenerator};
 pub fn main() {
     let seed = 270493;
 
-    let poly_map = polymap::PolyMap::new(800, 600, 5.0);
+    const WIDTH: i32 = 800;
+    const HEIGHT: i32 = 600;
+
+    let poly_map = polymap::PolyMap::new(WIDTH as usize, HEIGHT as usize, 8.0);
     let mut world = WorldGenerator::new().generate(&poly_map, seed);
 
     let mut world_view_mode = worldgen::ViewMode::Heightmap;
 
-    let (mut rl, thread) = raylib::init().size(800, 600).title("Hello, World").build();
+    let (mut rl, thread) = raylib::init().size(WIDTH, HEIGHT).title("Hello, World").build();
     rl.set_target_fps(60);
 
     let mut polymap_texture = Painter::new(&mut rl, &thread, &poly_map).unwrap();

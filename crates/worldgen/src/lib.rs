@@ -4,148 +4,20 @@ use rand::*;
 use polymap::map_shader::{Color, MapShader};
 use polymap::{compute::*, *};
 
-#[derive(Clone)]
+mod heightmap;
+mod rivers;
+
+pub use heightmap::HeightMap;
+pub use rivers::Rivers;
+
+use heightmap::*;
+
 pub struct WorldMap {
     pub heightmap: HeightMap,
-    terrain_types: CellData<TerrainType>,
+    terrain: CellData<TerrainType>,
+    rivers: Rivers,
 }
 
-struct HeightMapBuilder {
-    corners: CornerData<f64>,
-}
-
-impl HeightMapBuilder {
-    fn new(poly_map: &PolyMap, default: f64) -> Self {
-        let corners = CornerData::for_each(&poly_map, |_, _| default);
-        Self { corners }
-    }
-
-    fn perlin_noise(
-        &mut self,
-        poly_map: &PolyMap,
-        perlin_freq: f64,
-        intensity: f64,
-        rng: &mut impl Rng,
-    ) {
-        use noise::{NoiseFn, Perlin};
-
-        let perlin = Perlin::new();
-
-        let x_rand = rng.gen_range(0..100) as f64;
-        let y_rand = rng.gen_range(0..100) as f64;
-
-        self.corners.update_each(poly_map, |_, corner, h| {
-            let px = x_rand + corner.x() * perlin_freq;
-            let py = y_rand + corner.y() * perlin_freq;
-            let noise = perlin.get([px, py]);
-            *h += (noise + 1.0) / 2.0 * intensity;
-        })
-    }
-
-    fn random_slope(&mut self, poly_map: &PolyMap, steepness: f64, rng: &mut impl Rng) {
-        let m = rng.gen_range(-100..200) as f64 / 100.0;
-
-        let w = poly_map.width() as f64;
-        let h = poly_map.height() as f64;
-        self.corners
-            .update_each(&poly_map, |_, corner, corner_height| {
-                let distance = (corner.x() - w / 2.0) * m - (corner.y() - h / 2.0);
-                *corner_height += distance * steepness;
-            })
-    }
-
-    fn clump(&mut self, poly_map: &PolyMap, amount: f64, decay: f64, end: f64, rng: &mut impl Rng) {
-        let starting = CornerPicker::random(poly_map, rng);
-        self.corners.spread(
-            poly_map,
-            starting,
-            amount,
-            |accum| {
-                if accum.abs() > end.abs() {
-                    Some(accum * decay)
-                } else {
-                    None
-                }
-            },
-            |_, corner_height, x| *corner_height += *x,
-        )
-    }
-
-    fn normalize(&mut self) {
-        let min = self.corners.data.iter().copied().reduce(f64::min).unwrap();
-        let max = self.corners.data.iter().copied().reduce(f64::max).unwrap();
-        self.corners
-            .data
-            .iter_mut()
-            .for_each(|x| *x = (*x - min) / (max - min));
-    }
-
-    fn relax(&mut self, poly_map: &PolyMap, t: f64) {
-        self.corners
-            .update_with_neighbors(poly_map, |x, neighborhood| {
-                let average = neighborhood.iter().copied().sum::<f64>();
-                let n = neighborhood.len() as f64;
-                *x = t * (average / n) + (1.0 - t) * *x
-            })
-    }
-
-    fn build(self, poly_map: &PolyMap) -> HeightMap {
-        let cells: CellData<f64> = CellData::corner_average(poly_map, &self.corners);
-
-        let descent_vector = CornerData::for_each(poly_map, |id, corner| {
-            let my_elevation = self.corners[id];
-            let mut slope: Option<Slope> = None;
-
-            for &neighbor in corner.neighbors() {
-                let neighbor_elevation = self.corners[neighbor];
-                let diff = my_elevation - neighbor_elevation;
-                if diff > 0.0 {
-                    let update = match slope {
-                        None => true,
-                        Some(slope) => slope.intensity < diff,
-                    };
-                    if update {
-                        slope = Some(Slope {
-                            towards: neighbor,
-                            intensity: diff,
-                        });
-                    }
-                }
-            }
-            slope
-        });
-
-        HeightMap {
-            corners: self.corners,
-            cells,
-            descent_vector,
-        }
-    }
-}
-#[derive(Clone)]
-pub struct HeightMap {
-    pub corners: CornerData<f64>,
-    pub cells: CellData<f64>,
-    descent_vector: CornerData<Option<Slope>>,
-}
-
-#[derive(Clone, Copy)]
-struct Slope {
-    towards: CornerId,
-    intensity: f64,
-}
-
-pub struct Rivers {
-    flow_volume: CornerData<f64>,
-}
-
-impl Rivers {
-    pub fn new(poly_map: &PolyMap, height_map: &HeightMap, base_flow: f64) -> Rivers {
-        let mut flow_volume = CornerData::for_each(poly_map, |_, _| base_flow);
-
-        Rivers { flow_volume }
-    }
-}
 
 pub struct WorldGenerator;
 
@@ -186,13 +58,19 @@ impl WorldGenerator {
             hm.build(&poly_map)
         };
 
-        let terrain_types = heightmap
+        let terrain = heightmap
             .cells
             .transform(|_, &x| TerrainType::from_height(x));
+    
+
+        let rivers = Rivers::new(poly_map, &heightmap, &terrain, 1.0);
+
+    
 
         WorldMap {
             heightmap,
-            terrain_types,
+            terrain,
+            rivers,
         }
     }
 }
@@ -221,6 +99,14 @@ impl TerrainType {
             .find_map(|&(tt, x)| if height <= x { Some(tt) } else { None })
             .expect("Invalid terrain type, heightmap out of bounds")
     }
+
+    fn is_water(&self) -> bool {
+        match self {
+            TerrainType::Water => true,
+            TerrainType::DeepWater => true,
+            _ => false,
+        }
+    }
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -248,7 +134,7 @@ impl<'a> MapShader for WorldMapView<'a> {
                 let intensity = (255.0 * height).max(0.0).min(255.0).round() as u8;
                 Color::new(intensity, intensity, intensity, 255)
             }
-            ViewMode::Terrain => match self.world_map.terrain_types[id] {
+            ViewMode::Terrain => match self.world_map.terrain[id] {
                 TerrainType::DeepWater => Color::DARKBLUE,
                 TerrainType::Water => Color::BLUE,
                 TerrainType::Land => Color::GREEN,
@@ -258,7 +144,39 @@ impl<'a> MapShader for WorldMapView<'a> {
         }
     }
 
-    fn edge(&self, _: polymap::EdgeId) -> Color {
-        Color::BLACK
+    fn edge(&self, id: polymap::EdgeId, _: &Edge) -> Option<Color> {
+        match self.mode {
+            ViewMode::Heightmap => Some(Color::BLACK),
+            ViewMode::Terrain => {
+                if !self.world_map.rivers.is_river[id] {
+                    return None
+                }
+                let flow = self.world_map.rivers.edge_flux[id];
+                let max = 250.0;
+                let prop = 255.0 * (flow/max);
+                Some(Color::new(0, 0, 255, prop.round() as u8))
+            }
+        }
+    }
+
+    fn draw_corners(&self) -> bool {
+        match self.mode {
+            ViewMode::Heightmap => true,
+            ViewMode::Terrain => false,
+        }
+    }
+    
+    fn corner(&self, id: CornerId, _:&Corner) -> Option<Color> {
+        match self.mode {
+            ViewMode::Heightmap => {
+                let has_slope = self.world_map.heightmap.descent_vector[id].is_some();
+                if !has_slope {
+                    Some(Color::RED)
+                } else {
+                    None
+                }
+            }
+            ViewMode::Terrain => None,
+        }
     }
 }

@@ -18,6 +18,7 @@ pub struct WorldMap {
     rivers: Rivers,
 }
 
+const RIVER_BASE_FLOW: f64 = 2.0;
 
 pub struct WorldGenerator;
 
@@ -63,9 +64,7 @@ impl WorldGenerator {
             .transform(|_, &x| TerrainType::from_height(x));
     
 
-        let rivers = Rivers::new(poly_map, &heightmap, &terrain, 1.0);
-
-    
+        let rivers = Rivers::new(poly_map, &heightmap, &terrain, RIVER_BASE_FLOW);
 
         WorldMap {
             heightmap,

@@ -5,7 +5,7 @@ use crate::{HeightMap, TerrainType};
 
 
 pub struct Rivers {
-    corner_flux: CornerData<f64>,
+    pub corner_flux: CornerData<f64>,
     pub edge_flux: EdgeData<f64>,
     pub is_river: EdgeData<bool>,
 }
@@ -15,7 +15,7 @@ const MIN_RIVER: f64 = 100.0;
 impl Rivers {
     pub(super) fn new(poly_map: &PolyMap, height_map: &HeightMap, terrain:&CellData<TerrainType>, base_flow: f64) -> Rivers {
         let corner_flux = {
-            let mut corner_flux = CornerData::for_each(poly_map, |_, _| base_flow);
+            let mut corner_flux = CornerData::for_each(poly_map, |id, _| height_map.corners[id] * base_flow);
 
             let flow_list = height_map.downhill.iter().copied().filter_map(|from| {
                 height_map.descent_vector[from].map(|slope| (from, slope.towards))

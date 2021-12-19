@@ -133,7 +133,7 @@ impl Painter {
 
     fn draw_edges(ctx: &mut Handle, poly_map: &PolyMap, shader: &impl MapShader) {
         for (id, edge) in poly_map.edges() {
-                if let Some(color) = shader.edge(id, edge) {
+            if let Some(color) = shader.edge(id, edge) {
                 let ((ax, ay), (bx, by)) = poly_map.edge_endpoints_coords(edge);
                 let start = Vector2::new(ax as f32, poly_map.height as f32 - ay as f32);
                 let end = Vector2::new(bx as f32, poly_map.height as f32 - by as f32);
@@ -154,9 +154,9 @@ impl Painter {
                     poly_map.height as f32 - corner.y() as f32,
                 ) - half_size;
                 let size = half_size * 2.0;
-    
+
                 ctx.draw_rectangle_v(position, size, color);
-            }            
+            }
         }
     }
 }

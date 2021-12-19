@@ -69,7 +69,10 @@ impl<T> CornerData<T> {
         }
     }
 
-    pub fn ordered_by(&self, mut compare: impl FnMut(&T, &T) -> std::cmp::Ordering) -> Vec<CornerId> {
+    pub fn ordered_by(
+        &self,
+        mut compare: impl FnMut(&T, &T) -> std::cmp::Ordering,
+    ) -> Vec<CornerId> {
         let mut temporary: Vec<_> = (0..self.data.len()).map(CornerId).collect();
         temporary.sort_by(|&id1, &id2| {
             let t1 = &self.data[id1.0];
@@ -121,33 +124,32 @@ impl<T> std::ops::IndexMut<CornerId> for CornerData<T> {
 
 #[derive(Clone)]
 pub struct EdgeData<T> {
-    pub data: Vec<T>
+    pub data: Vec<T>,
 }
 
-impl <T> EdgeData<T> {
-
-    pub fn for_each(
-        poly_map: &PolyMap,
-        mut combine: impl FnMut(EdgeId, &Edge) -> T,
-    ) -> Self {
-        let data:Vec<_> = poly_map.edges().map(|(id, edge)| {
-            combine(id, edge)
-        }).collect();
+impl<T> EdgeData<T> {
+    pub fn for_each(poly_map: &PolyMap, mut combine: impl FnMut(EdgeId, &Edge) -> T) -> Self {
+        let data: Vec<_> = poly_map
+            .edges()
+            .map(|(id, edge)| combine(id, edge))
+            .collect();
 
         Self { data }
     }
 
-    
     pub fn from_corners_data<U>(
         poly_map: &PolyMap,
         corners_data: &CornerData<U>,
         mut combine: impl FnMut(EdgeId, &Edge, &U, &U) -> T,
     ) -> Self {
-        let data:Vec<_> = poly_map.edges().map(|(id, edge)| {
-            let c1 = &corners_data[edge.endpoints.min];
-            let c2 = &corners_data[edge.endpoints.max];
-            combine(id, edge, c1, c2)
-        }).collect();
+        let data: Vec<_> = poly_map
+            .edges()
+            .map(|(id, edge)| {
+                let c1 = &corners_data[edge.endpoints.min];
+                let c2 = &corners_data[edge.endpoints.max];
+                combine(id, edge, c1, c2)
+            })
+            .collect();
 
         Self { data }
     }
@@ -158,14 +160,17 @@ impl <T> EdgeData<T> {
         mut combine: impl FnMut(EdgeId, &Edge, &[&U]) -> T,
     ) -> Self {
         let mut buf = vec![];
-        let data:Vec<_> = poly_map.edges().map(|(id, edge)| {
-            buf.clear();
-            for &cell in edge.cells() {
-                buf.push(&cell_data[cell]);
-            }
+        let data: Vec<_> = poly_map
+            .edges()
+            .map(|(id, edge)| {
+                buf.clear();
+                for &cell in edge.cells() {
+                    buf.push(&cell_data[cell]);
+                }
 
-            combine(id, edge, buf.as_slice())
-        }).collect();
+                combine(id, edge, buf.as_slice())
+            })
+            .collect();
 
         Self { data }
     }
@@ -183,16 +188,16 @@ impl<T> std::ops::IndexMut<EdgeId> for EdgeData<T> {
     }
 }
 
-
 #[derive(Clone)]
 pub struct CellData<T> {
     pub data: Vec<T>,
 }
 
 impl<T> CellData<T> {
-
     pub fn for_each(poly_map: &PolyMap, mut f: impl FnMut(CellId, &Cell) -> T) -> Self {
-        Self { data: poly_map.cells().map(|(id, cell)| f(id, cell)).collect() }
+        Self {
+            data: poly_map.cells().map(|(id, cell)| f(id, cell)).collect(),
+        }
     }
 
     pub fn from_corners_data<U>(
@@ -217,7 +222,6 @@ impl<T> CellData<T> {
                 .collect(),
         }
     }
-
 
     pub fn transform<U>(&self, mut f: impl FnMut(CellId, &T) -> U) -> CellData<U> {
         CellData {

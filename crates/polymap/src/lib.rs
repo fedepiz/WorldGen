@@ -4,7 +4,7 @@ pub mod map_shader;
 pub mod painter;
 
 use geo::{contains::Contains, coords_iter::CoordsIter, Polygon};
-use std::collections::{HashMap};
+use std::collections::HashMap;
 
 #[derive(Clone, Copy, Debug, PartialOrd)]
 struct Location(f64, f64);
@@ -92,7 +92,7 @@ impl Corner {
             coords: (location.0, location.1),
             edges: vec![edge],
             neighbors: vec![],
-            is_border
+            is_border,
         }
     }
 
@@ -107,15 +107,17 @@ impl Corner {
         self.neighbors.as_slice()
     }
 
-    pub fn edges(&self) -> &[EdgeId] { 
+    pub fn edges(&self) -> &[EdgeId] {
         self.edges.as_slice()
     }
 
     pub fn other_edge(&self, id: EdgeId) -> Option<EdgeId> {
-        self.edges().iter().find(|&&other| other != id ).copied()
+        self.edges().iter().find(|&&other| other != id).copied()
     }
 
-    pub fn is_border(&self) -> bool { self.is_border }
+    pub fn is_border(&self) -> bool {
+        self.is_border
+    }
 
     fn fix(&mut self) {
         self.neighbors.sort();
@@ -139,11 +141,17 @@ impl Edge {
     fn add_owner(&mut self, cell: CellId) {
         self.cells.push(cell);
     }
-    
-    pub fn start(&self) -> CornerId { self.endpoints.min }
-    pub fn end(&self) -> CornerId { self.endpoints.max }
 
-    pub fn cells(&self) -> &[CellId] { self.cells.as_slice() }
+    pub fn start(&self) -> CornerId {
+        self.endpoints.min
+    }
+    pub fn end(&self) -> CornerId {
+        self.endpoints.max
+    }
+
+    pub fn cells(&self) -> &[CellId] {
+        self.cells.as_slice()
+    }
 
     fn fix(&mut self) {
         self.cells.sort();
@@ -191,7 +199,6 @@ impl PolyMap {
         )
         .expect("Failed to build voronoi diagram");
 
-        
         let polygons: Vec<_> = voronoi
             .cells()
             .iter()
@@ -201,8 +208,8 @@ impl PolyMap {
             })
             .collect();
 
-
-        let (mut corners, mut edges, mut cells) = Self::build_elements(polygons, width as f64, height as f64);
+        let (mut corners, mut edges, mut cells) =
+            Self::build_elements(polygons, width as f64, height as f64);
 
         // NOTE: Some indices point beyond the number of cells. These are meant
         // for the borders, I think. Skip them
@@ -244,7 +251,6 @@ impl PolyMap {
         edges.iter_mut().for_each(|x| x.fix());
         cells.iter_mut().for_each(|x| x.fix());
 
-
         PolyMap {
             width,
             height,
@@ -255,7 +261,11 @@ impl PolyMap {
         }
     }
 
-    fn build_elements(polygons: Vec<Polygon<f64>>, width: f64, height: f64) -> (Vec<Corner>, Vec<Edge>, Vec<Cell>) {
+    fn build_elements(
+        polygons: Vec<Polygon<f64>>,
+        width: f64,
+        height: f64,
+    ) -> (Vec<Corner>, Vec<Edge>, Vec<Cell>) {
         let mut edges: Vec<Edge> = vec![];
         let mut corners: Vec<Corner> = vec![];
         let mut cells: Vec<Cell> = vec![];
@@ -277,7 +287,10 @@ impl PolyMap {
                     None => {
                         let id = CornerId(corners.len());
                         corners_lookup.insert(location, id);
-                        let is_border = location.0 <= 0. || location.0 >= width || location.1 <= 0. || location.1 >= height; 
+                        let is_border = location.0 <= 0.
+                            || location.0 >= width
+                            || location.1 <= 0.
+                            || location.1 >= height;
                         corners.push(Corner::new(edge_id, location, is_border));
                         id
                     }
@@ -390,14 +403,17 @@ impl PolyMap {
 
     pub fn edge_between(&self, c1: CornerId, c2: CornerId) -> Option<EdgeId> {
         let op = OrderedPair::new(c1, c2);
-        self.corners[op.min.0].edges().iter().copied()
+        self.corners[op.min.0]
+            .edges()
+            .iter()
+            .copied()
             .find(|&edge_id| self.edges[edge_id.0].endpoints.max == op.max)
     }
 
     pub fn corner(&self, id: CornerId) -> &Corner {
         &self.corners[id.0]
     }
-    
+
     pub fn edge(&self, id: EdgeId) -> &Edge {
         &self.edges[id.0]
     }

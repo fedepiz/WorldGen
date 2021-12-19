@@ -1,5 +1,5 @@
-use polymap::*;
 use polymap::compute::*;
+use polymap::*;
 
 use rand::Rng;
 
@@ -37,7 +37,14 @@ impl HeightMapBuilder {
             })
     }
 
-    pub(super) fn clump(&mut self, poly_map: &PolyMap, amount: f64, decay: f64, end: f64, rng: &mut impl Rng) {
+    pub(super) fn clump(
+        &mut self,
+        poly_map: &PolyMap,
+        amount: f64,
+        decay: f64,
+        end: f64,
+        rng: &mut impl Rng,
+    ) {
         let starting = CornerPicker::random(poly_map, rng);
         self.corners.spread(
             poly_map,
@@ -75,13 +82,17 @@ impl HeightMapBuilder {
     pub fn planchon_darboux(&mut self, poly_map: &PolyMap) {
         let epsilon = 0.001;
         let h = &mut self.corners;
-        let mut new_h = CornerData::for_each(poly_map, |id, corner| {
-            if corner.is_border() {
-                h[id]
-            } else {
-                100.0
-            }
-        });
+        let mut new_h =
+            CornerData::for_each(
+                poly_map,
+                |id, corner| {
+                    if corner.is_border() {
+                        h[id]
+                    } else {
+                        100.0
+                    }
+                },
+            );
 
         let mut changed = true;
         while changed {
@@ -105,13 +116,10 @@ impl HeightMapBuilder {
             }
         }
 
-
         std::mem::swap(&mut new_h, h);
     }
 
-
-    pub(super) fn build(self, poly_map: &PolyMap) -> HeightMap {     
-        
+    pub(super) fn build(self, poly_map: &PolyMap) -> HeightMap {
         let descent_vector = CornerData::for_each(poly_map, |id, corner| {
             let my_elevation = self.corners[id];
             let mut slope: Option<Slope> = None;
@@ -137,7 +145,6 @@ impl HeightMapBuilder {
 
         let cells: CellData<f64> = CellData::corner_average(poly_map, &self.corners);
 
-
         fn descending(x: &f64, y: &f64) -> std::cmp::Ordering {
             (if x < y {
                 std::cmp::Ordering::Less
@@ -145,7 +152,8 @@ impl HeightMapBuilder {
                 std::cmp::Ordering::Equal
             } else {
                 std::cmp::Ordering::Greater
-            }).reverse()
+            })
+            .reverse()
         }
 
         let downhill = self.corners.ordered_by(descending);
@@ -167,16 +175,23 @@ pub struct HeightMap {
 }
 
 impl HeightMap {
-    pub fn corner_height(&self,id: CornerId) -> f64 { self.corners[id] }
-
-    pub fn cell_height(&self, id: CellId) -> f64 { self.cells[id] }
-
-    /// True if there is a slope going from a to b
-    pub fn is_descent(&self, top: CornerId, bottom:CornerId) -> bool {
-        self.descent_vector[top].as_ref().map(|x| x.towards == bottom).unwrap_or(false)
+    pub fn corner_height(&self, id: CornerId) -> f64 {
+        self.corners[id]
     }
 
-    pub fn descent_vector(&self, id:CornerId) -> Option<&Slope> {
+    pub fn cell_height(&self, id: CellId) -> f64 {
+        self.cells[id]
+    }
+
+    /// True if there is a slope going from a to b
+    pub fn is_descent(&self, top: CornerId, bottom: CornerId) -> bool {
+        self.descent_vector[top]
+            .as_ref()
+            .map(|x| x.towards == bottom)
+            .unwrap_or(false)
+    }
+
+    pub fn descent_vector(&self, id: CornerId) -> Option<&Slope> {
         self.descent_vector[id].as_ref()
     }
 
@@ -204,28 +219,30 @@ impl HeightMap {
         }
     }
 
-
-    /// Returns an iterator over pairs of corners a -> b, which follow the downhill slope 
+    /// Returns an iterator over pairs of corners a -> b, which follow the downhill slope
     /// of each vector. The paths are not joind though
-    pub(crate) fn downhill_flow(&self) -> impl Iterator<Item=(CornerId, CornerId)> + '_ {
-        self.downhill.iter().copied()
-            .filter_map(|from| {
-                self.descent_vector(from).map(|slope| (from, slope.towards))
-             })
+    pub(crate) fn downhill_flow(&self) -> impl Iterator<Item = (CornerId, CornerId)> + '_ {
+        self.downhill
+            .iter()
+            .copied()
+            .filter_map(|from| self.descent_vector(from).map(|slope| (from, slope.towards)))
     }
-    
+
     // Starting from the given corner, walks downhill, recording all corner touched
-    pub (crate) fn downhill_path(&self, corner: CornerId) -> DownhillPath {
-        DownhillPath { node: corner, hm: self }
+    pub(crate) fn downhill_path(&self, corner: CornerId) -> DownhillPath {
+        DownhillPath {
+            node: corner,
+            hm: self,
+        }
     }
 }
 
-pub (crate) struct DownhillPath<'a> {
+pub(crate) struct DownhillPath<'a> {
     node: CornerId,
-    hm: &'a HeightMap
+    hm: &'a HeightMap,
 }
 
-impl <'a> Iterator for DownhillPath<'a> {
+impl<'a> Iterator for DownhillPath<'a> {
     type Item = CornerId;
 
     fn next(&mut self) -> Option<CornerId> {

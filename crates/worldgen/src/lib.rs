@@ -6,16 +6,15 @@ use rand::*;
 use polymap::map_shader::{Color, MapShader};
 use polymap::{compute::*, *};
 
+pub mod conf;
 mod generators;
 mod heightmap;
 mod hydrology;
-pub mod conf;
 
 pub use heightmap::HeightMap;
 pub use hydrology::Hydrology;
 
 use heightmap::*;
-
 
 pub struct WorldMap {
     pub heightmap: HeightMap,
@@ -23,14 +22,12 @@ pub struct WorldMap {
 }
 
 pub struct WorldGenerator {
-    conf: WorldGenConf
+    conf: WorldGenConf,
 }
 
 impl WorldGenerator {
     pub fn new(conf: WorldGenConf) -> Self {
-        Self {
-            conf
-        }
+        Self { conf }
     }
 
     pub fn generate(&self, poly_map: &PolyMap, seed: u64) -> WorldMap {
@@ -41,13 +38,22 @@ impl WorldGenerator {
             let conf = &self.conf.heightmap;
             let mut hm = HeightMapBuilder::new(&poly_map, 0.);
 
-            for _ in 0 .. conf.slopes.number {
+            for _ in 0..conf.slopes.number {
                 hm.random_slope(poly_map, conf.slopes.intensity, rng);
             }
-            hm.perlin_noise(poly_map, conf.perlin1.frequency, conf.perlin1.intensity, rng);
-            hm.perlin_noise(poly_map, conf.perlin2.frequency, conf.perlin2.intensity, rng);
+            hm.perlin_noise(
+                poly_map,
+                conf.perlin1.frequency,
+                conf.perlin1.intensity,
+                rng,
+            );
+            hm.perlin_noise(
+                poly_map,
+                conf.perlin2.frequency,
+                conf.perlin2.intensity,
+                rng,
+            );
 
-       
             for _ in 0..conf.clumps.number {
                 hm.clump(poly_map, conf.clumps.intensity, 0.90, 0.05, rng)
             }
@@ -69,15 +75,20 @@ impl WorldGenerator {
             hm.build(&poly_map)
         };
 
-        let terrain = CellData::for_each(
-            poly_map, |id, _| TerrainType::from_height(heightmap.cell_height(id))
-        );
-    
+        let terrain = CellData::for_each(poly_map, |id, _| {
+            TerrainType::from_height(heightmap.cell_height(id))
+        });
+
         let hydrology = {
             let conf = &self.conf.hydrology;
             let mut hb = HydrologyBuilder::new(&poly_map);
             hb.height_scaled(poly_map, &heightmap, conf.rain.height_coeff);
-            hb.perlin_noise(poly_map, conf.rain.perlin.frequency, conf.rain.perlin.intensity, rng);
+            hb.perlin_noise(
+                poly_map,
+                conf.rain.perlin.frequency,
+                conf.rain.perlin.intensity,
+                rng,
+            );
 
             hb.build(poly_map, &heightmap, &terrain, conf.min_river_flux)
         };
@@ -113,7 +124,7 @@ impl TerrainType {
             .enumerate()
             .find_map(|(idx, &(_, x))| if height < x { Some(idx) } else { None })
             .unwrap()
-        }
+    }
 
     fn from_height(height: f64) -> TerrainType {
         Self::LEVELS[Self::idx_from_height(height)].0
@@ -122,19 +133,22 @@ impl TerrainType {
     fn from_height_range(height: f64) -> (TerrainType, TerrainType, f64) {
         let high_idx = Self::idx_from_height(height);
 
-        let low = Self::LEVELS.get(high_idx - 1).copied().unwrap_or(Self::LEVELS[0]);
+        let low = Self::LEVELS
+            .get(high_idx - 1)
+            .copied()
+            .unwrap_or(Self::LEVELS[0]);
         let high = Self::LEVELS[high_idx];
 
         // Don't mix land and sea
         let t = if low.0.is_water() != high.0.is_water() {
-            1.0   
+            1.0
         } else {
             let n = high.1 - low.1;
             // Same height -> only one terrain
             if n == 0.0 {
                 1.0
             } else {
-                (height - low.1)/(high.1 - low.1)
+                (height - low.1) / (high.1 - low.1)
             }
         };
         (low.0, high.0, t)
@@ -176,22 +190,20 @@ impl<'a> MapShader for WorldMapView<'a> {
                 Color::new(intensity, intensity, intensity, 255)
             }
             ViewMode::Terrain => {
-            
-                let terrain_color = |terrain| {
-                    match terrain {
-                        TerrainType::DeepWater => Color::DARKBLUE,
-                        TerrainType::Water => Color::BLUE,
-                        TerrainType::Land => Color::GREEN,
-                        TerrainType::Hill => Color::BROWN,
-                        TerrainType::Mountain => Color::WHITE,
-                    }
+                let terrain_color = |terrain| match terrain {
+                    TerrainType::DeepWater => Color::DARKBLUE,
+                    TerrainType::Water => Color::BLUE,
+                    TerrainType::Land => Color::GREEN,
+                    TerrainType::Hill => Color::BROWN,
+                    TerrainType::Mountain => Color::WHITE,
                 };
 
-                let (tlower, theigher, t) = TerrainType::from_height_range(self.world_map.heightmap.cell_height(id));
+                let (tlower, theigher, t) =
+                    TerrainType::from_height_range(self.world_map.heightmap.cell_height(id));
                 let clower = terrain_color(tlower);
                 let chigher = terrain_color(theigher);
                 interpolate_colors(clower, chigher, t)
-            },
+            }
             ViewMode::Hydrology => {
                 let rainfall = 100.0 * self.world_map.hydrology.cell_rainfall(id);
                 Color::new(0, 0, 255, rainfall.round().min(255.0) as u8)
@@ -204,14 +216,14 @@ impl<'a> MapShader for WorldMapView<'a> {
             ViewMode::Heightmap => Some(Color::BLACK),
             ViewMode::Terrain => {
                 if !self.world_map.hydrology.rivers().is_segment(id) {
-                    return None
+                    return None;
                 }
                 let flow = self.world_map.hydrology.edge_flux(id);
                 Some(Color::new(0, 0, 255, flow.round().min(255.0) as u8))
             }
-            ViewMode::Hydrology => {                
+            ViewMode::Hydrology => {
                 let flow = self.world_map.hydrology.edge_flux(id);
-                
+
                 Some(Color::new(0, 0, 255, flow.round().min(255.0) as u8))
             }
         }
@@ -224,8 +236,8 @@ impl<'a> MapShader for WorldMapView<'a> {
             ViewMode::Hydrology => true,
         }
     }
-    
-    fn corner(&self, id: CornerId, corner:&Corner) -> Option<Color> {
+
+    fn corner(&self, id: CornerId, corner: &Corner) -> Option<Color> {
         match self.mode {
             ViewMode::Heightmap => {
                 let has_slope = self.world_map.heightmap.descent_vector(id).is_some();
@@ -246,7 +258,7 @@ impl<'a> MapShader for WorldMapView<'a> {
                 } else {
                     None
                 }
-            },
+            }
         }
     }
 }
@@ -260,6 +272,6 @@ fn interpolate_colors(c1: Color, c2: Color, t: f64) -> Color {
     )
 }
 
-fn lerp8(a:u8, b:u8, t: f64) -> u8 {
+fn lerp8(a: u8, b: u8, t: f64) -> u8 {
     (((1.0 - t) * a as f64) + (t * b as f64)).round() as u8
 }

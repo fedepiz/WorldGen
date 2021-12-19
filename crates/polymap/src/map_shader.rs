@@ -4,9 +4,9 @@ pub use raylib::color::Color;
 
 pub trait MapShader {
     fn cell(&self, id: CellId) -> Color;
-    fn edge(&self, id: EdgeId, edge:&Edge) -> Option<Color>;
+    fn edge(&self, id: EdgeId, edge: &Edge) -> Option<Color>;
     fn draw_corners(&self) -> bool;
-    fn corner(&self, id: CornerId, corner:&Corner) -> Option<Color>;
+    fn corner(&self, id: CornerId, corner: &Corner) -> Option<Color>;
 }
 
 use rand::Rng;

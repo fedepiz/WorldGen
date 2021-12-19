@@ -1,22 +1,21 @@
 use polymap::painter::{Painter, Validation};
 use rand::Rng;
-use raylib::prelude::*;
-use worldgen::{ViewMode, WorldGenerator, conf::WorldGenConf};
 use raylib::consts::KeyboardKey;
+use raylib::prelude::*;
+use worldgen::{conf::WorldGenConf, ViewMode, WorldGenerator};
 
 pub fn main() {
     let mut seed = 27049319951022;
 
     const WIDTH: i32 = 1600;
     const HEIGHT: i32 = 900;
-    
-    
+
     let make_world_gen = || {
         let file = std::fs::read_to_string("./config.toml").unwrap();
         let conf: WorldGenConf = toml::from_str(file.as_str()).unwrap();
         WorldGenerator::new(conf)
     };
-    let mut world_gen = make_world_gen(); 
+    let mut world_gen = make_world_gen();
 
     let poly_map = polymap::PolyMap::new(WIDTH as usize, HEIGHT as usize, 8.0);
 
@@ -25,7 +24,10 @@ pub fn main() {
     let mut world_view_mode = worldgen::ViewMode::Heightmap;
 
     raylib::core::logging::set_trace_log(raylib::consts::TraceLogLevel::LOG_NONE);
-    let (mut rl, thread) = raylib::init().size(WIDTH, HEIGHT).title("Hello, World").build();
+    let (mut rl, thread) = raylib::init()
+        .size(WIDTH, HEIGHT)
+        .title("Hello, World")
+        .build();
     rl.set_target_fps(60);
 
     let mut polymap_texture = Painter::new(&mut rl, &thread, &poly_map).unwrap();
@@ -33,7 +35,7 @@ pub fn main() {
     const VIEW_MODES: &'static [(worldgen::ViewMode, KeyboardKey)] = &[
         (ViewMode::Heightmap, KeyboardKey::KEY_ONE),
         (ViewMode::Terrain, KeyboardKey::KEY_TWO),
-        (ViewMode::Hydrology, KeyboardKey::KEY_THREE)
+        (ViewMode::Hydrology, KeyboardKey::KEY_THREE),
     ];
 
     while !rl.window_should_close() {

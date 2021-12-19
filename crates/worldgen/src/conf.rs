@@ -16,11 +16,10 @@ pub struct HeightMap {
     pub perlin2: PerlinConf,
 }
 
-
 #[derive(Deserialize)]
 pub struct Hydrology {
-   pub min_river_flux: f64,
-   pub rain: RainConf,
+    pub min_river_flux: f64,
+    pub rain: RainConf,
 }
 #[derive(Deserialize)]
 pub struct RainConf {
@@ -39,4 +38,3 @@ pub struct PerlinConf {
     pub frequency: f64,
     pub intensity: f64,
 }
-

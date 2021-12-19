@@ -10,11 +10,14 @@ pub mod conf;
 mod generators;
 mod heightmap;
 mod hydrology;
+mod thermology;
 
 pub use heightmap::HeightMap;
 pub use hydrology::Hydrology;
 
 use heightmap::*;
+
+use generators::GridGenerator;
 
 pub struct WorldMap {
     pub heightmap: HeightMap,

@@ -110,6 +110,16 @@ impl<T: Clone> CornerData<T> {
     }
 }
 
+impl CornerData<f64> {
+    pub fn max(&self) -> f64 {
+        self.data.iter().copied().reduce(f64::max).unwrap()
+    }
+
+    pub fn min(&self) -> f64 {
+        self.data.iter().copied().reduce(f64::min).unwrap()
+    }
+}
+
 impl<T> std::ops::Index<CornerId> for CornerData<T> {
     type Output = T;
     fn index(&self, index: CornerId) -> &Self::Output {

@@ -1,82 +1,20 @@
 use polymap::compute::*;
 use polymap::*;
 
-use rand::Rng;
-
-use crate::generators;
+use crate::{generators::GridGenerator};
 
 pub(crate) struct HeightMapBuilder {
     corners: CornerData<f64>,
+}
+
+impl GridGenerator for HeightMapBuilder {
+    fn grid_mut(&mut self) -> &mut CornerData<f64> { &mut self.corners }
 }
 
 impl HeightMapBuilder {
     pub(crate) fn new(poly_map: &PolyMap, default: f64) -> Self {
         let corners = CornerData::for_each(&poly_map, |_, _| default);
         Self { corners }
-    }
-
-    pub(crate) fn perlin_noise(
-        &mut self,
-        poly_map: &PolyMap,
-        perlin_freq: f64,
-        intensity: f64,
-        rng: &mut impl Rng,
-    ) {
-        generators::perlin_noise(&mut self.corners, poly_map, perlin_freq, intensity, rng)
-    }
-
-    pub(super) fn random_slope(&mut self, poly_map: &PolyMap, steepness: f64, rng: &mut impl Rng) {
-        let m = rng.gen_range(-100..200) as f64 / 100.0;
-
-        let w = poly_map.width() as f64;
-        let h = poly_map.height() as f64;
-        self.corners
-            .update_each(&poly_map, |_, corner, corner_height| {
-                let distance = (corner.x() - w / 2.0) * m - (corner.y() - h / 2.0);
-                *corner_height += distance * steepness;
-            })
-    }
-
-    pub(super) fn clump(
-        &mut self,
-        poly_map: &PolyMap,
-        amount: f64,
-        decay: f64,
-        end: f64,
-        rng: &mut impl Rng,
-    ) {
-        let starting = CornerPicker::random(poly_map, rng);
-        self.corners.spread(
-            poly_map,
-            starting,
-            amount,
-            |accum| {
-                if accum.abs() > end.abs() {
-                    Some(accum * decay)
-                } else {
-                    None
-                }
-            },
-            |_, corner_height, x| *corner_height += *x,
-        )
-    }
-
-    pub(super) fn normalize(&mut self) {
-        let min = self.corners.data.iter().copied().reduce(f64::min).unwrap();
-        let max = self.corners.data.iter().copied().reduce(f64::max).unwrap();
-        self.corners
-            .data
-            .iter_mut()
-            .for_each(|x| *x = (*x - min) / (max - min));
-    }
-
-    pub(super) fn relax(&mut self, poly_map: &PolyMap, t: f64) {
-        self.corners
-            .update_with_neighbors(poly_map, |x, neighborhood| {
-                let average = neighborhood.iter().copied().sum::<f64>();
-                let n = neighborhood.len() as f64;
-                *x = t * (average / n) + (1.0 - t) * *x
-            })
     }
 
     pub fn planchon_darboux(&mut self, poly_map: &PolyMap) {

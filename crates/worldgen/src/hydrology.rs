@@ -2,9 +2,8 @@ use std::collections::HashSet;
 
 use polymap::compute::*;
 use polymap::*;
-use rand::Rng;
 
-use crate::generators;
+use crate::generators::GridGenerator;
 use crate::{HeightMap, TerrainType};
 
 pub(crate) struct HydrologyBuilder {
@@ -23,22 +22,6 @@ impl HydrologyBuilder {
             let height = hm.corner_height(id);
             *h += height * coeff
         })
-    }
-
-    pub(crate) fn perlin_noise(
-        &mut self,
-        poly_map: &PolyMap,
-        perlin_freq: f64,
-        intensity: f64,
-        rng: &mut impl Rng,
-    ) {
-        generators::perlin_noise(
-            &mut self.corner_rainfall,
-            poly_map,
-            perlin_freq,
-            intensity,
-            rng,
-        )
     }
 
     pub fn build(
@@ -79,6 +62,11 @@ impl HydrologyBuilder {
         }
     }
 }
+
+impl GridGenerator for HydrologyBuilder {
+    fn grid_mut(&mut self) -> &mut CornerData<f64> { &mut self.corner_rainfall }
+}
+
 
 pub struct Hydrology {
     cell_rainfall: CellData<f64>,

@@ -4,16 +4,16 @@ use polymap::compute::*;
 use crate::{HeightMap, TerrainType};
 
 
-pub struct Rivers {
+pub struct Hydrology {
     pub corner_flux: CornerData<f64>,
     pub edge_flux: EdgeData<f64>,
     pub is_river: EdgeData<bool>,
 }
 
-const MIN_RIVER: f64 = 100.0;
+const MIN_RIVER: f64 = 75.0;
 
-impl Rivers {
-    pub(super) fn new(poly_map: &PolyMap, height_map: &HeightMap, terrain:&CellData<TerrainType>, base_flow: f64) -> Rivers {
+impl Hydrology {
+    pub(super) fn new(poly_map: &PolyMap, height_map: &HeightMap, terrain:&CellData<TerrainType>, base_flow: f64) -> Hydrology {
         let corner_flux = {
             let mut corner_flux = CornerData::for_each(poly_map, |id, _| height_map.corners[id] * base_flow);
 
@@ -45,6 +45,6 @@ impl Rivers {
         );
     
 
-        Rivers { corner_flux, edge_flux, is_river }
+        Hydrology { corner_flux, edge_flux, is_river }
     }
 }

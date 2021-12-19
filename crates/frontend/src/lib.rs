@@ -4,7 +4,7 @@ use raylib::prelude::*;
 use worldgen::{ViewMode, WorldGenerator};
 
 pub fn main() {
-    let seed = 270493;
+    let mut seed = 27049319951022;
 
     const WIDTH: i32 = 800;
     const HEIGHT: i32 = 600;
@@ -22,6 +22,7 @@ pub fn main() {
     const VIEW_MODES: &'static [(worldgen::ViewMode, raylib::consts::KeyboardKey)] = &[
         (ViewMode::Heightmap, raylib::consts::KeyboardKey::KEY_ONE),
         (ViewMode::Terrain, raylib::consts::KeyboardKey::KEY_TWO),
+        (ViewMode::Hydrology, raylib::consts::KeyboardKey::KEY_THREE)
     ];
 
     while !rl.window_should_close() {
@@ -29,7 +30,7 @@ pub fn main() {
             polymap_texture.invalidate(Validation::Invalid);
         }
         if rl.is_key_pressed(raylib::consts::KeyboardKey::KEY_G) {
-            let seed = rand::thread_rng().gen();
+            seed = rand::thread_rng().gen();
             world = WorldGenerator::new().generate(&poly_map, seed);
             polymap_texture.invalidate(Validation::Invalid)
         }
@@ -52,7 +53,7 @@ pub fn main() {
             }
         }
 
-        let fps = format!("FPS: {}", rl.get_fps());
+        let fps = format!("FPS: {}, Seed: {}", rl.get_fps(), seed);
         rl.set_window_title(&thread, &fps);
 
         let mut ctx = rl.begin_drawing(&thread);

@@ -5,17 +5,17 @@ use polymap::map_shader::{Color, MapShader};
 use polymap::{compute::*, *};
 
 mod heightmap;
-mod rivers;
+mod hydrology;
 
 pub use heightmap::HeightMap;
-pub use rivers::Rivers;
+pub use hydrology::Hydrology;
 
 use heightmap::*;
 
 pub struct WorldMap {
     pub heightmap: HeightMap,
     terrain: CellData<TerrainType>,
-    rivers: Rivers,
+    hydrology: Hydrology,
 }
 
 const RIVER_BASE_FLOW: f64 = 2.0;
@@ -64,12 +64,12 @@ impl WorldGenerator {
             .transform(|_, &x| TerrainType::from_height(x));
     
 
-        let rivers = Rivers::new(poly_map, &heightmap, &terrain, RIVER_BASE_FLOW);
+        let rivers = Hydrology::new(poly_map, &heightmap, &terrain, RIVER_BASE_FLOW);
 
         WorldMap {
             heightmap,
             terrain,
-            rivers,
+            hydrology: rivers,
         }
     }
 }
@@ -112,6 +112,7 @@ impl TerrainType {
 pub enum ViewMode {
     Terrain,
     Heightmap,
+    Hydrology,
 }
 
 pub struct WorldMapView<'a> {
@@ -140,6 +141,7 @@ impl<'a> MapShader for WorldMapView<'a> {
                 TerrainType::Hill => Color::BROWN,
                 TerrainType::Mountain => Color::WHITE,
             },
+            ViewMode::Hydrology => Color::WHITE,
         }
     }
 
@@ -147,13 +149,16 @@ impl<'a> MapShader for WorldMapView<'a> {
         match self.mode {
             ViewMode::Heightmap => Some(Color::BLACK),
             ViewMode::Terrain => {
-                if !self.world_map.rivers.is_river[id] {
+                if !self.world_map.hydrology.is_river[id] {
                     return None
                 }
-                let flow = self.world_map.rivers.edge_flux[id];
-                let max = 250.0;
-                let prop = 255.0 * (flow/max);
-                Some(Color::new(0, 0, 255, prop.round() as u8))
+                let flow = self.world_map.hydrology.edge_flux[id];
+                Some(Color::new(0, 0, 255, flow.round().min(255.0) as u8))
+            }
+            ViewMode::Hydrology => {                
+                let flow = self.world_map.hydrology.edge_flux[id];
+                
+                Some(Color::new(0, 0, 255, flow.round().min(255.0) as u8))
             }
         }
     }
@@ -162,6 +167,7 @@ impl<'a> MapShader for WorldMapView<'a> {
         match self.mode {
             ViewMode::Heightmap => true,
             ViewMode::Terrain => false,
+            ViewMode::Hydrology => false,
         }
     }
     
@@ -176,6 +182,7 @@ impl<'a> MapShader for WorldMapView<'a> {
                 }
             }
             ViewMode::Terrain => None,
+            ViewMode::Hydrology => None,
         }
     }
 }

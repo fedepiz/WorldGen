@@ -71,7 +71,7 @@ impl Thermolgoy {
                 let is_water = corner.cells(poly_map).all(|cell| terrain[cell].is_water());
 
                 *temperature = if is_water {
-                    (*temperature * 0.5).min(40.0)
+                    (*temperature * 0.5).min(0.4)
                 } else {
                     let penalty = (1.5 - heightmap.corner_height(id)).min(1.0);
                     *temperature * penalty

@@ -54,7 +54,7 @@ pub fn main() {
             world = world_gen.generate(&poly_map, seed);
             polymap_texture.invalidate(Validation::Invalid)
         }
-        if rl.is_key_pressed(KeyboardKey::KEY_F) {
+        if rl.is_key_down(KeyboardKey::KEY_F) {
             world.reflow_rivers(&poly_map);
             polymap_texture.invalidate(Validation::Invalid)
         }

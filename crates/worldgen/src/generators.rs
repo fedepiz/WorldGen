@@ -28,6 +28,26 @@ impl Field for Slope {
     }
 }
 
+pub struct Band {
+    m: f64,
+    cx: f64,
+    cy: f64,
+    radius: f64,
+}
+
+impl Band {
+    pub fn new(cx: f64, cy: f64, m: f64, radius: f64) -> Self {
+        Self { cx, cy, m, radius }
+    }
+}
+
+impl Field for Band {
+    fn value(&self, x: f64, y: f64) -> f64 {
+        let distance = ((x - self.cx) * self.m - (y - self.cy)).abs();
+        (1.0 - distance / self.radius).max(0.0)
+    }
+}
+
 pub struct PerlinField {
     pub frequency: f64,
     pub x_shift: f64,
@@ -96,7 +116,7 @@ pub trait GridGenerator {
     fn grid(&self) -> &CornerData<f64>;
     fn grid_mut(&mut self) -> &mut CornerData<f64>;
 
-    fn add_field(&mut self, poly_map: &PolyMap, field: impl Field, intensity: f64) {
+    fn add_field(&mut self, poly_map: &PolyMap, field: &impl Field, intensity: f64) {
         self.grid_mut().update_each(poly_map, |_, corner, h| {
             let v = field.value(corner.x(), corner.y());
             *h += v * intensity;

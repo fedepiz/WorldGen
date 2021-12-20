@@ -1,16 +1,20 @@
 use polymap::compute::*;
 use polymap::*;
 
-use crate::{generators::GridGenerator};
+use crate::generators::GridGenerator;
 
 pub(crate) struct HeightMapBuilder {
     corners: CornerData<f64>,
 }
 
 impl GridGenerator for HeightMapBuilder {
-    fn grid(&self) -> &CornerData<f64> { &self.corners }
+    fn grid(&self) -> &CornerData<f64> {
+        &self.corners
+    }
 
-    fn grid_mut(&mut self) -> &mut CornerData<f64> { &mut self.corners }
+    fn grid_mut(&mut self) -> &mut CornerData<f64> {
+        &mut self.corners
+    }
 }
 
 impl HeightMapBuilder {
@@ -61,7 +65,7 @@ impl HeightMapBuilder {
 
     pub(super) fn build(mut self, poly_map: &PolyMap) -> HeightMap {
         self.normalize();
-        
+
         let descent_vector = CornerData::for_each(poly_map, |id, corner| {
             let my_elevation = self.corners[id];
             let mut slope: Option<Slope> = None;
@@ -180,7 +184,7 @@ impl HeightMap {
 
     pub(crate) fn make_builder(&self) -> HeightMapBuilder {
         HeightMapBuilder {
-            corners: self.corners.clone()
+            corners: self.corners.clone(),
         }
     }
 }

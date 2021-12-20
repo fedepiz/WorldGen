@@ -59,7 +59,6 @@ pub fn main() {
             polymap_texture.invalidate(Validation::Invalid)
         }
 
-
         if let Some(mode) = VIEW_MODES.iter().find_map(|(mode, key)| {
             if rl.is_key_pressed(*key) && &world_view_mode != mode {
                 Some(*mode)

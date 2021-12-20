@@ -31,20 +31,28 @@ impl HydrologyBuilder {
         terrain: &CellData<TerrainType>,
         min_river_flux: f64,
     ) -> Hydrology {
-       Hydrology::new(self.corner_rainfall, poly_map, height_map, terrain, min_river_flux)
+        let mut hydrology = Hydrology::new(min_river_flux, self.corner_rainfall);
+        hydrology.recompute(poly_map, height_map, terrain);
+        hydrology
     }
 }
 
 impl GridGenerator for HydrologyBuilder {
-    fn grid(&self) -> &CornerData<f64> { &self.corner_rainfall }
+    fn grid(&self) -> &CornerData<f64> {
+        &self.corner_rainfall
+    }
 
-    fn grid_mut(&mut self) -> &mut CornerData<f64> { &mut self.corner_rainfall }
+    fn grid_mut(&mut self) -> &mut CornerData<f64> {
+        &mut self.corner_rainfall
+    }
 }
 
-
 pub struct Hydrology {
+    // Innate data
     min_river_flux: f64,
     corner_rainfall: CornerData<f64>,
+
+    // Computed data
     cell_rainfall: CellData<f64>,
     corner_flux: CornerData<f64>,
     edge_flux: EdgeData<f64>,
@@ -52,43 +60,51 @@ pub struct Hydrology {
 }
 
 impl Hydrology {
-    fn new(corner_rainfall: CornerData<f64>,
-           poly_map: &PolyMap,
-           height_map: &HeightMap,
-           terrain: &CellData<TerrainType>,
-           min_river_flux: f64,) -> Self {
-        let cell_rainfall = CellData::corner_average(poly_map, &corner_rainfall);
+    fn new(min_river_flux: f64, corner_rainfall: CornerData<f64>) -> Self {
+        Self {
+            min_river_flux,
+            corner_rainfall,
+            cell_rainfall: CellData::empty_shell(),
+            corner_flux: CornerData::empty_shell(),
+            edge_flux: EdgeData::empty_shell(),
+            rivers: Rivers::new(),
+        }
+    }
 
-        let corner_flux = {
-            let mut corner_flux = corner_rainfall.clone();
-            corner_flux
-                .flow(height_map.downhill_flow(), |x, y| {
-                    *x += *y;
-                });
+    pub(crate) fn recompute(
+        &mut self,
+        poly_map: &PolyMap,
+        height_map: &HeightMap,
+        terrain: &CellData<TerrainType>,
+    ) {
+        self.cell_rainfall = CellData::corner_average(poly_map, &self.corner_rainfall);
+
+        self.corner_flux = {
+            let mut corner_flux = self.corner_rainfall.clone();
+            corner_flux.flow(height_map.downhill_flow(), |x, y| {
+                *x += *y;
+            });
             corner_flux
         };
 
-        let edge_flux = EdgeData::for_each(poly_map, |_, edge| {
+        self.edge_flux = EdgeData::for_each(poly_map, |_, edge| {
             let mut flux = 0.0;
             if height_map.is_descent(edge.start(), edge.end()) {
-                flux += corner_flux[edge.start()]
+                flux += self.corner_flux[edge.start()]
             }
             if height_map.is_descent(edge.end(), edge.start()) {
-                flux += corner_flux[edge.end()]
+                flux += self.corner_flux[edge.end()]
             }
             flux
         });
 
-        let rivers = Rivers::new(poly_map, height_map, terrain, &edge_flux, min_river_flux);
-
-        Hydrology {
-            min_river_flux,
-            corner_rainfall,
-            corner_flux,
-            edge_flux,
-            cell_rainfall,
-            rivers,
-        }
+        self.rivers = Rivers::compute(
+            poly_map,
+            height_map,
+            terrain,
+            &self.edge_flux,
+            self.min_river_flux,
+        );
     }
 
     pub fn corner_flux(&self, corner: CornerId) -> f64 {
@@ -106,11 +122,6 @@ impl Hydrology {
     pub fn rivers(&self) -> &Rivers {
         &self.rivers
     }
-
-    pub(crate) fn reflow_rivers(&mut self, poly_map: &PolyMap, height_map: &HeightMap, terrain: &CellData<TerrainType>) { 
-        let corner_rainfall = std::mem::replace(&mut self.corner_rainfall, CornerData::empty_shell());
-        *self = Self::new(corner_rainfall, poly_map, height_map, terrain, self.min_river_flux)
-    }
 }
 
 pub struct Rivers {
@@ -119,7 +130,14 @@ pub struct Rivers {
 }
 
 impl Rivers {
-    fn new(
+    fn new() -> Self {
+        Self {
+            edge_is_river: EdgeData::empty_shell(),
+            paths: vec![],
+        }
+    }
+
+    fn compute(
         poly_map: &PolyMap,
         height_map: &HeightMap,
         terrain: &CellData<TerrainType>,

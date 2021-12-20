@@ -16,7 +16,6 @@ pub struct CornerData<T> {
 }
 
 impl<T> CornerData<T> {
-
     pub fn empty_shell() -> Self {
         Self { data: vec![] }
     }
@@ -143,6 +142,10 @@ pub struct EdgeData<T> {
 }
 
 impl<T> EdgeData<T> {
+    pub fn empty_shell() -> Self {
+        Self { data: vec![] }
+    }
+
     pub fn for_each(poly_map: &PolyMap, mut combine: impl FnMut(EdgeId, &Edge) -> T) -> Self {
         let data: Vec<_> = poly_map
             .edges()
@@ -209,6 +212,10 @@ pub struct CellData<T> {
 }
 
 impl<T> CellData<T> {
+    pub fn empty_shell() -> Self {
+        Self { data: vec![] }
+    }
+
     pub fn for_each(poly_map: &PolyMap, mut f: impl FnMut(CellId, &Cell) -> T) -> Self {
         Self {
             data: poly_map.cells().map(|(id, cell)| f(id, cell)).collect(),

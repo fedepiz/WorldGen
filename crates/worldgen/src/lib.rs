@@ -44,7 +44,8 @@ impl WorldMap {
         self.terrain = CellData::for_each(poly_map, |id, _| {
             TerrainType::from_height(self.heightmap.cell_height(id))
         });
-        self.hydrology.reflow_rivers(poly_map, &self.heightmap, &self.terrain);
+        self.hydrology.recompute(poly_map, &self.heightmap, &self.terrain);
+        self.thermology.recompute(poly_map, &self.heightmap, &self.terrain)
     }
 }
 

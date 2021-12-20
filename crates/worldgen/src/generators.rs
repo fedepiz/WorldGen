@@ -9,14 +9,14 @@ pub trait Field {
 pub struct Slope {
     m: f64,
     cx: f64,
-    cy: f64
+    cy: f64,
 }
 
 impl Slope {
     pub fn with_rng(w: f64, h: f64, rng: &mut impl Rng) -> Self {
         Self {
-            cx: w/2.0,
-            cy: h/2.0,
+            cx: w / 2.0,
+            cy: h / 2.0,
             m: rng.gen_range(-100..200) as f64 / 100.0,
         }
     }
@@ -47,8 +47,11 @@ impl PerlinField {
         let noise = Perlin::new();
 
         Self {
-            noise, frequency, x_shift, y_shift
-        }        
+            noise,
+            frequency,
+            x_shift,
+            y_shift,
+        }
     }
 }
 
@@ -64,7 +67,8 @@ impl Field for PerlinField {
 }
 
 pub struct Clump {
-    x: f64, y: f64,
+    x: f64,
+    y: f64,
     amount: f64,
     decay: f64,
 }
@@ -74,7 +78,8 @@ impl Clump {
         Self {
             x: rng.gen_range(0.0..=w),
             y: rng.gen_range(0.0..=h),
-            amount, decay
+            amount,
+            decay,
         }
     }
 }
@@ -98,9 +103,15 @@ pub trait GridGenerator {
         });
     }
 
-    fn add_field_scaled(&mut self, poly_map: &PolyMap, field: impl Field, coefficients:  &impl GridGenerator, intensity: f64) {
+    fn add_field_scaled(
+        &mut self,
+        poly_map: &PolyMap,
+        field: impl Field,
+        coefficients: &impl GridGenerator,
+        intensity: f64,
+    ) {
         let coeffs = coefficients.grid();
-        self.grid_mut().update_each(poly_map, |id, corner, h| { 
+        self.grid_mut().update_each(poly_map, |id, corner, h| {
             let v = field.value(corner.x(), corner.y());
             let coeff = coeffs[id];
             *h += v * coeff * intensity;
@@ -112,8 +123,7 @@ pub trait GridGenerator {
 
         let min = grid.min();
         let max = grid.max();
-        grid
-            .data
+        grid.data
             .iter_mut()
             .for_each(|x| *x = (*x - min) / (max - min));
     }

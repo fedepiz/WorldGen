@@ -1,3 +1,3 @@
 A polyogonal grid based World Generator
 
-![Alt text](screenshot.png)
+![Alt text](screenshot.png?)

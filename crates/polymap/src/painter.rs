@@ -1,14 +1,76 @@
 use raylib::prelude::*;
 
-use super::element_set::ElementSet;
 use super::map_shader::MapShader;
 use super::*;
 
 type Handle<'a> = RaylibTextureMode<'a, RaylibDrawHandle<'a>>;
 
+struct Tessellation {
+    cells_vertices: Vec<Vec<Vector2>>
+}
+
+impl Tessellation {
+    pub fn new(poly_map: &PolyMap) -> Self {
+        use lyon::math::Point;
+        use lyon::path::builder::*;
+        use lyon::tessellation::geometry_builder::simple_builder;
+        use lyon::tessellation::{FillOptions, FillTessellator, VertexBuffers};
+
+        let mut cells_triangles = vec![];
+        let mut geometry = VertexBuffers::<Point, u16>::new();
+        {
+            let options = FillOptions::tolerance(0.1);
+            let mut tessellator = FillTessellator::new();
+            for (_, cell) in poly_map.cells() {
+
+                let points: Vec<_> = cell
+                    .polygon
+                    .exterior()
+                    .points_iter()
+                    .map(|p| lyon::geom::point(p.x() as f32, poly_map.height as f32 - p.y() as f32))
+                    .collect();
+                let polygon = lyon::path::Polygon {
+                    points: points.as_slice(),
+                    closed: true,
+                };
+
+                geometry.vertices.clear();
+                geometry.indices.clear();
+                let mut geometry_builder = simple_builder(&mut geometry);
+                let mut builder = tessellator.builder(&options, &mut geometry_builder);
+                builder.add_polygon(polygon);
+                builder.build().unwrap();
+
+                let mut cell_vertices = vec![];
+                for triangle in geometry.indices.chunks(3) {
+                    for idx in 0.. 3{
+                        let v: &lyon::math::Point = &geometry.vertices[triangle[idx] as usize];
+                        cell_vertices.push(Vector2::new(v.x, v.y))
+                    }
+                }
+                cells_triangles.push(cell_vertices);
+                
+            }
+        }
+        Self {
+            cells_vertices: cells_triangles
+        }
+    }
+
+    pub fn draw<'a>(&self, ctx: &mut Handle, poly_map:&PolyMap, shader:&impl MapShader) {
+        for ((id, _), vxs) in poly_map.cells().zip(self.cells_vertices.iter()) {
+            for triangle in vxs.chunks_exact(3) {
+                let color = shader.cell(id);
+                ctx.draw_triangle(triangle[0], triangle[1], triangle[2], color);
+            }
+        }
+    }
+}
+
 pub struct Painter {
     texture: RenderTexture2D,
     validation: Validation,
+    tessellation: Tessellation,
 }
 
 impl Painter {
@@ -20,8 +82,11 @@ impl Painter {
         let texture =
             rl.load_render_texture(thread, polymap.width as u32, polymap.height as u32)?;
 
+        let tessellation = Tessellation::new(polymap);
+
         Ok(Self {
             texture,
+            tessellation,
             validation: Validation::Invalid,
         })
     }
@@ -65,70 +130,13 @@ impl Painter {
         );
 
         {
-            Self::draw_cells(&mut tctx, poly_map, shader, &self.validation);
+            self.tessellation.draw(&mut tctx, poly_map, shader);
             Self::draw_edges(&mut tctx, poly_map, shader);
 
             if shader.draw_corners() {
                 Self::draw_corners(&mut tctx, poly_map, shader);
             }
         };
-    }
-
-    fn draw_cells(
-        ctx: &mut Handle,
-        poly_map: &PolyMap,
-        shader: &impl MapShader,
-        validation: &Validation,
-    ) {
-        use lyon::math::Point;
-        use lyon::path::builder::*;
-        use lyon::tessellation::geometry_builder::simple_builder;
-        use lyon::tessellation::{FillOptions, FillTessellator, VertexBuffers};
-
-        let mut geometry = VertexBuffers::<Point, u16>::new();
-        {
-            let options = FillOptions::tolerance(0.1);
-            let mut tessellator = FillTessellator::new();
-            for (id, cell) in poly_map.cells() {
-                if !validation.cell_is_invalid(id) {
-                    continue;
-                }
-
-                let points: Vec<_> = cell
-                    .polygon
-                    .exterior()
-                    .points_iter()
-                    .map(|p| lyon::geom::point(p.x() as f32, poly_map.height as f32 - p.y() as f32))
-                    .collect();
-                let polygon = lyon::path::Polygon {
-                    points: points.as_slice(),
-                    closed: true,
-                };
-
-                geometry.vertices.clear();
-                geometry.indices.clear();
-                let mut geometry_builder = simple_builder(&mut geometry);
-                let mut builder = tessellator.builder(&options, &mut geometry_builder);
-                builder.add_polygon(polygon);
-                builder.build().unwrap();
-
-                let color = shader.cell(id);
-
-                for triangle in geometry.indices.chunks(3) {
-                    let make_point = |idx| {
-                        let v: &lyon::math::Point = &geometry.vertices[idx as usize];
-                        Vector2::new(v.x, v.y)
-                    };
-
-                    ctx.draw_triangle(
-                        make_point(triangle[0]),
-                        make_point(triangle[1]),
-                        make_point(triangle[2]),
-                        color,
-                    )
-                }
-            }
-        }
     }
 
     fn draw_edges(ctx: &mut Handle, poly_map: &PolyMap, shader: &impl MapShader) {
@@ -164,7 +172,6 @@ impl Painter {
 pub enum Validation {
     Valid,
     Invalid,
-    Partial(ElementSet),
 }
 
 impl Validation {
@@ -179,21 +186,7 @@ impl Validation {
         match self {
             Self::Valid => *self = other,
             Self::Invalid => {}
-            Self::Partial(partial_invalidation) => match other {
-                Self::Invalid => *self = Validation::Invalid,
-                Self::Valid => {}
-                Self::Partial(other_invalidation) => {
-                    partial_invalidation.join(&other_invalidation);
-                }
-            },
-        }
-    }
-
-    fn cell_is_invalid(&self, id: CellId) -> bool {
-        match self {
-            Self::Valid => false,
-            Self::Invalid => true,
-            Self::Partial(elements) => elements.cells.contains(&id),
         }
     }
 }
+

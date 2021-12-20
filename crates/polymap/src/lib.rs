@@ -1,5 +1,4 @@
 pub mod compute;
-pub mod element_set;
 pub mod map_shader;
 pub mod painter;
 
@@ -144,10 +143,6 @@ impl Edge {
         }
     }
 
-    fn add_owner(&mut self, cell: CellId) {
-        self.cells.push(cell);
-    }
-
     pub fn start(&self) -> CornerId {
         self.endpoints.min
     }
@@ -227,6 +222,7 @@ impl PolyMap {
                 .map(|idx| CellId(idx))
                 .collect();
         }
+        
 
         // Use the corner edges to get their neighbors
         for (idx, corner) in corners.iter_mut().enumerate() {
@@ -238,7 +234,8 @@ impl PolyMap {
                     corner.neighbors.push(edge.endpoints.min);
                 }
             }
-        }
+        }        
+
 
         let cell_quadtree = {
             let mut cell_quadtree = {
@@ -310,7 +307,7 @@ impl PolyMap {
                 match edges_lookup.get(&endpoints) {
                     Some(&edge_id) => {
                         let edge = &mut edges[edge_id.0];
-                        edge.add_owner(cell_id);
+                        edge.cells.push(cell_id);
                         cell_corners.push(edge.endpoints.min);
                         cell_corners.push(edge.endpoints.max);
                         edge_id
@@ -321,7 +318,7 @@ impl PolyMap {
                         let c1 = add_corner(edge_id, endpoints.min);
                         let c2 = add_corner(edge_id, endpoints.max);
                         let mut edge = Edge::new(c1, c2);
-                        edge.add_owner(cell_id);
+                        edge.cells.push(cell_id);
                         cell_corners.push(edge.endpoints.min);
                         cell_corners.push(edge.endpoints.max);
                         edges.push(edge);

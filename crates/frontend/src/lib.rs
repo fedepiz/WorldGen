@@ -17,7 +17,7 @@ pub fn main() {
     };
     let mut world_gen = make_world_gen();
 
-    let poly_map = polymap::PolyMap::new(WIDTH as usize, HEIGHT as usize, 8.0);
+    let poly_map = polymap::PolyMap::new(WIDTH as usize, HEIGHT as usize, 5.0);
 
     let mut world = world_gen.generate(&poly_map, seed);
 

@@ -3,7 +3,6 @@ use raylib::prelude::*;
 use super::map_shader::MapShader;
 use super::*;
 
-type Handle<'a> = RaylibTextureMode<'a, RaylibDrawHandle<'a>>;
 
 pub struct Painter {
     texture: RenderTexture2D,
@@ -79,7 +78,7 @@ impl Painter {
         };
     }
 
-    fn draw_edges(ctx: &mut Handle, poly_map: &PolyMap, shader: &impl MapShader) {
+    fn draw_edges(ctx: &mut impl RaylibDraw, poly_map: &PolyMap, shader: &impl MapShader) {
         for (id, edge) in poly_map.edges() {
             if let Some(color) = shader.edge(id, edge) {
                 let ((ax, ay), (bx, by)) = poly_map.edge_endpoints_coords(edge);
@@ -91,7 +90,7 @@ impl Painter {
         }
     }
 
-    fn draw_corners(ctx: &mut Handle, poly_map: &PolyMap, shader: &impl MapShader) {
+    fn draw_corners(ctx: &mut impl RaylibDraw, poly_map: &PolyMap, shader: &impl MapShader) {
         for (id, corner) in poly_map.vertices() {
             if let Some(color) = shader.vertex(id, corner) {
                 let tile_halfsize = 2.0;
@@ -185,7 +184,7 @@ impl Tessellation {
         }
     }
 
-    pub fn draw<'a>(&self, ctx: &mut Handle, poly_map:&PolyMap, shader:&impl MapShader) {
+    pub fn draw<'a>(&self, ctx: &mut impl RaylibDraw, poly_map:&PolyMap, shader:&impl MapShader) {
         for ((id, _), triangles) in poly_map.cells().zip(self.cells.iter()) {
             for triangle in triangles {
                 let color = shader.cell(id);

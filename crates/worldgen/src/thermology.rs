@@ -84,5 +84,4 @@ impl Thermolgoy {
     pub fn cell_temperature(&self, id: CellId) -> f64 {
         self.cell_temperature[id]
     }
-
 }

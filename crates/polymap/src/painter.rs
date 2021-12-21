@@ -3,7 +3,6 @@ use macroquad::prelude::{self as mq, Vec2};
 use super::map_shader::MapShader;
 use super::*;
 
-
 pub struct Painter {
     render_target: mq::RenderTarget,
     validation: Validation,
@@ -11,10 +10,8 @@ pub struct Painter {
 }
 
 impl Painter {
-    pub fn new(
-        polymap: &PolyMap,
-    ) -> Result<Self, String> {
-        let texture = mq::render_target( polymap.width as u32, polymap.height as u32);
+    pub fn new(polymap: &PolyMap) -> Result<Self, String> {
+        let texture = mq::render_target(polymap.width as u32, polymap.height as u32);
 
         let tessellation = Tessellation::new(polymap);
 
@@ -25,35 +22,25 @@ impl Painter {
         })
     }
 
-    pub fn draw(
-        &mut self,
-        x: f32,
-        y: f32,
-        poly_map: &PolyMap,
-        shader: &impl MapShader,
-    ) {
+    pub fn draw(&mut self, x: f32, y: f32, poly_map: &PolyMap, shader: &impl MapShader) {
         if !self.validation.is_valid() {
             self.draw_all(poly_map, shader);
             self.validation = Validation::Valid;
         }
 
-        mq::draw_texture(self.render_target.texture, x, y, mq::WHITE);
+        let mut params = mq::DrawTextureParams::default();
+        params.dest_size = Some(Vec2::new(mq::screen_width(), mq::screen_height()));
+        mq::draw_texture_ex(self.render_target.texture, x, y, mq::WHITE, params);
     }
 
     pub fn invalidate(&mut self, validation: Validation) {
         self.validation.join(validation)
     }
 
-    pub fn draw_all(
-        &mut self,
-        poly_map: &PolyMap,
-        shader: &impl MapShader,
-    ) {
-            
+    pub fn draw_all(&mut self, poly_map: &PolyMap, shader: &impl MapShader) {
         let mut camera = mq::Camera2D::from_display_rect(mq::Rect::new(0.0, 0.0, 1600.0, 900.0));
         camera.render_target = Some(self.render_target);
         mq::set_camera(&camera);
-        
 
         mq::draw_rectangle(
             0.0,
@@ -65,7 +52,7 @@ impl Painter {
 
         {
             self.tessellation.draw(&poly_map, shader);
-            Self::draw_edges( poly_map, shader);
+            Self::draw_edges(poly_map, shader);
 
             if shader.draw_vertices() {
                 Self::draw_vertices(poly_map, shader);
@@ -92,7 +79,7 @@ impl Painter {
             if let Some(color) = shader.vertex(id, corner) {
                 let tile_halfsize = 2.0;
 
-                let half_size = Vec2::ZERO + Vec2::new(tile_halfsize,tile_halfsize);
+                let half_size = Vec2::ZERO + Vec2::new(tile_halfsize, tile_halfsize);
                 let position = Vec2::new(
                     corner.x() as f32,
                     poly_map.height as f32 - corner.y() as f32,
@@ -127,7 +114,7 @@ impl Validation {
 }
 
 struct Tessellation {
-    cells: Vec<Vec<[Vec2; 3]>>
+    cells: Vec<Vec<[Vec2; 3]>>,
 }
 
 impl Tessellation {
@@ -143,7 +130,6 @@ impl Tessellation {
             let options = FillOptions::tolerance(0.1);
             let mut tessellator = FillTessellator::new();
             for (_, cell) in poly_map.cells() {
-
                 let points: Vec<_> = cell
                     .polygon
                     .exterior()
@@ -168,20 +154,15 @@ impl Tessellation {
                         let v: &lyon::math::Point = &geometry.vertices[triangle[idx] as usize];
                         Vec2::new(v.x, v.y)
                     };
-                    triangles.push([
-                        make_vertex(0), make_vertex(1), make_vertex(2)   
-                    ]);
+                    triangles.push([make_vertex(0), make_vertex(1), make_vertex(2)]);
                 }
                 cells.push(triangles);
-                
             }
         }
-        Self {
-            cells
-        }
+        Self { cells }
     }
 
-    pub fn draw<'a>(&self, poly_map:&PolyMap, shader:&impl MapShader) {
+    pub fn draw<'a>(&self, poly_map: &PolyMap, shader: &impl MapShader) {
         for ((id, _), triangles) in poly_map.cells().zip(self.cells.iter()) {
             for triangle in triangles {
                 let color = shader.cell(id);

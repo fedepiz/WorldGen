@@ -1,7 +1,7 @@
 use super::*;
 use rand::Rng;
-use std::collections::HashSet;
 use rayon::iter::*;
+use std::collections::HashSet;
 pub struct VertexPicker;
 
 impl VertexPicker {
@@ -15,10 +15,18 @@ pub struct VertexData<T> {
     pub data: Vec<T>,
 }
 
-impl <T: Send+ Sync> VertexData<T> {
-    pub fn par_for_each(poly_map: &PolyMap,  f: impl Fn(VertexId, &Vertex) -> T + Send + Sync) -> Self {
+impl<T: Send + Sync> VertexData<T> {
+    pub fn par_for_each(
+        poly_map: &PolyMap,
+        f: impl Fn(VertexId, &Vertex) -> T + Send + Sync,
+    ) -> Self {
         Self {
-            data: poly_map.vertices.par_iter().enumerate().map(|(id, c)| f(VertexId(id), c)).collect(),
+            data: poly_map
+                .vertices
+                .par_iter()
+                .enumerate()
+                .map(|(id, c)| f(VertexId(id), c))
+                .collect(),
         }
     }
 }
@@ -28,19 +36,20 @@ impl<T> VertexData<T> {
         Self { data: vec![] }
     }
 
-    pub fn for_each(poly_map: &PolyMap,  f: impl Fn(VertexId, &Vertex) -> T) -> Self {
+    pub fn for_each(poly_map: &PolyMap, f: impl Fn(VertexId, &Vertex) -> T) -> Self {
         Self {
-            data: poly_map.vertices.iter().enumerate().map(|(id, c)| f(VertexId(id), c)).collect(),
+            data: poly_map
+                .vertices
+                .iter()
+                .enumerate()
+                .map(|(id, c)| f(VertexId(id), c))
+                .collect(),
         }
     }
 
-    pub fn update_each(
-        &mut self,
-        poly_map: &PolyMap,
-        f: impl Fn(VertexId, &Vertex, &mut T) -> (),
-    ) {
+    pub fn update_each(&mut self, poly_map: &PolyMap, f: impl Fn(VertexId, &Vertex, &mut T) -> ()) {
         for ((corner_id, corner), data) in poly_map.vertices().zip(self.data.iter_mut()) {
-             f(corner_id, corner, data)
+            f(corner_id, corner, data)
         }
     }
     pub fn spread<U>(

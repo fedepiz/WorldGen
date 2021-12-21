@@ -2,7 +2,7 @@ use noise::Perlin;
 use polymap::{compute::VertexData, PolyMap};
 use rand::Rng;
 
-pub trait Field : Send + Sync {
+pub trait Field: Send + Sync {
     fn value(&self, x: f64, y: f64) -> f64;
 }
 

@@ -90,7 +90,11 @@ impl Vertex {
     fn new(edge: EdgeId, location: Location, is_border: bool) -> Self {
         Self {
             coords: (location.0, location.1),
-            edges: { let mut v = ArrayVec::new(); v.push(edge); v},
+            edges: {
+                let mut v = ArrayVec::new();
+                v.push(edge);
+                v
+            },
             neighbors: ArrayVec::new(),
             is_border,
         }
@@ -98,7 +102,7 @@ impl Vertex {
 
     fn add_edge(&mut self, id: EdgeId) {
         if !self.edges.contains(&id) {
-            self.edges.push (id);
+            self.edges.push(id);
             self.edges.sort();
         }
     }
@@ -140,7 +144,7 @@ impl Vertex {
 
 pub struct Edge {
     endpoints: OrderedPair<VertexId>,
-    cells: ArrayVec<[CellId;2]>,
+    cells: ArrayVec<[CellId; 2]>,
 }
 
 impl Edge {
@@ -229,7 +233,6 @@ impl PolyMap {
                 .map(|idx| CellId(idx))
                 .collect();
         }
-        
 
         // Use the corner edges to get their neighbors
         for (idx, vertex) in vertices.iter_mut().enumerate() {
@@ -245,8 +248,7 @@ impl PolyMap {
                     }
                 }
             }
-        }        
-
+        }
 
         vertices.iter_mut().for_each(|x| x.fix());
         edges.iter_mut().for_each(|x| x.fix());
@@ -346,7 +348,6 @@ impl PolyMap {
         if px < 0.0 || py < 0.0 {
             return None;
         }
-
 
         let point = geo::Point::new(px as f64, py as f64);
 

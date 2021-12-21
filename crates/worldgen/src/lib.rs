@@ -6,7 +6,7 @@ use rand::*;
 use polymap::map_shader::{Color, MapShader};
 use polymap::{compute::*, *};
 
-use polymap::map_shader::colors as colors;
+use polymap::map_shader::colors;
 
 pub mod conf;
 mod generators;
@@ -234,6 +234,17 @@ pub enum ViewMode {
     Thermology,
 }
 
+impl ViewMode {
+    pub const fn name(&self) -> &'static str {
+        match self {
+            Self::Heightmap => "Heightmap",
+            Self::Terrain => "Geology",
+            Self::Hydrology => "Hydrology",
+            Self::Thermology => "Temperatures",
+        }
+    }
+}
+
 pub struct WorldMapView<'a> {
     world_map: &'a WorldMap,
     mode: ViewMode,
@@ -269,7 +280,7 @@ impl<'a> MapShader for WorldMapView<'a> {
                 interpolate_colors(clower, chigher, t as f32)
             }
             ViewMode::Hydrology => {
-                let rainfall = (self.world_map.hydrology.cell_rainfall(id) * 100.0)/255.0;
+                let rainfall = (self.world_map.hydrology.cell_rainfall(id) * 100.0) / 255.0;
                 Color::new(0.0, 0.0, 1.0, rainfall.min(1.0) as f32)
             }
             ViewMode::Thermology => {
@@ -288,11 +299,11 @@ impl<'a> MapShader for WorldMapView<'a> {
                 if !self.world_map.hydrology.rivers().is_segment(id) {
                     return None;
                 }
-                let flow = self.world_map.hydrology.edge_flux(id)/255.0;
+                let flow = self.world_map.hydrology.edge_flux(id) / 255.0;
                 Some(Color::new(0.0, 0.0, 1.0, flow.min(1.0) as f32))
             }
             ViewMode::Hydrology => {
-                let flow = self.world_map.hydrology.edge_flux(id)/255.0;
+                let flow = self.world_map.hydrology.edge_flux(id) / 255.0;
 
                 Some(Color::new(0.0, 0.0, 1.0, flow.min(1.0) as f32))
             }

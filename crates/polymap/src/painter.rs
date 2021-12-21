@@ -73,7 +73,7 @@ impl Painter {
             self.tessellation.draw(&mut tctx, poly_map, shader);
             Self::draw_edges(&mut tctx, poly_map, shader);
 
-            if shader.draw_corners() {
+            if shader.draw_vertices() {
                 Self::draw_corners(&mut tctx, poly_map, shader);
             }
         };
@@ -93,7 +93,7 @@ impl Painter {
 
     fn draw_corners(ctx: &mut Handle, poly_map: &PolyMap, shader: &impl MapShader) {
         for (id, corner) in poly_map.vertices() {
-            if let Some(color) = shader.corner(id, corner) {
+            if let Some(color) = shader.vertex(id, corner) {
                 let tile_halfsize = 2.0;
 
                 let half_size = Vector2::zero() + tile_halfsize;

@@ -5,8 +5,8 @@ pub use raylib::color::Color;
 pub trait MapShader {
     fn cell(&self, id: CellId) -> Color;
     fn edge(&self, id: EdgeId, edge: &Edge) -> Option<Color>;
-    fn draw_corners(&self) -> bool;
-    fn corner(&self, id: VertexId, corner: &Vertex) -> Option<Color>;
+    fn draw_vertices(&self) -> bool;
+    fn vertex(&self, id: VertexId, corner: &Vertex) -> Option<Color>;
 }
 
 use rand::Rng;

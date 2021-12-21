@@ -558,6 +558,7 @@ dependencies = [
 name = "polymap"
 version = "0.1.0"
 dependencies = [
+ "arrayvec",
  "fast_poisson",
  "geo",
  "lyon",

@@ -2,6 +2,7 @@ pub mod compute;
 pub mod map_shader;
 pub mod painter;
 
+use arrayvec::ArrayVec;
 use geo::{contains::Contains, Polygon};
 use std::collections::HashMap;
 
@@ -80,8 +81,8 @@ impl Cell {
 
 pub struct Vertex {
     coords: (f64, f64),
-    edges: Vec<EdgeId>,
-    neighbors: Vec<VertexId>,
+    edges: ArrayVec<[EdgeId; 4]>,
+    neighbors: ArrayVec<[VertexId; 4]>,
     is_border: bool,
 }
 
@@ -89,8 +90,8 @@ impl Vertex {
     fn new(edge: EdgeId, location: Location, is_border: bool) -> Self {
         Self {
             coords: (location.0, location.1),
-            edges: vec![edge],
-            neighbors: vec![],
+            edges: { let mut v = ArrayVec::new(); v.push(edge); v},
+            neighbors: ArrayVec::new(),
             is_border,
         }
     }
@@ -132,14 +133,14 @@ impl Vertex {
 
 pub struct Edge {
     endpoints: OrderedPair<VertexId>,
-    cells: Vec<CellId>,
+    cells: ArrayVec<[CellId;2]>,
 }
 
 impl Edge {
     fn new(c1: VertexId, c2: VertexId) -> Self {
         Self {
             endpoints: OrderedPair::new(c1, c2),
-            cells: vec![],
+            cells: ArrayVec::new(),
         }
     }
 
@@ -208,7 +209,7 @@ impl PolyMap {
             })
             .collect();
 
-        let (mut corners, mut edges, mut cells) =
+        let (mut vertices, mut edges, mut cells) =
             Self::build_elements(polygons, width as f64, height as f64);
 
         // NOTE: Some indices point beyond the number of cells. These are meant
@@ -224,19 +225,23 @@ impl PolyMap {
         
 
         // Use the corner edges to get their neighbors
-        for (idx, corner) in corners.iter_mut().enumerate() {
-            for edge in corner.edges.iter() {
+        for (idx, vertex) in vertices.iter_mut().enumerate() {
+            for edge in vertex.edges.iter() {
                 let edge = &edges[edge.0];
                 if edge.endpoints.min.0 == idx {
-                    corner.neighbors.push(edge.endpoints.max)
+                    if !vertex.neighbors.contains(&edge.endpoints.max) {
+                        vertex.neighbors.push(edge.endpoints.max)
+                    }
                 } else {
-                    corner.neighbors.push(edge.endpoints.min);
+                    if !vertex.neighbors.contains(&edge.endpoints.min) {
+                        vertex.neighbors.push(edge.endpoints.min);
+                    }
                 }
             }
         }        
 
 
-        corners.iter_mut().for_each(|x| x.fix());
+        vertices.iter_mut().for_each(|x| x.fix());
         edges.iter_mut().for_each(|x| x.fix());
         cells.iter_mut().for_each(|x| x.fix());
 
@@ -245,7 +250,7 @@ impl PolyMap {
             height,
             cells,
             edges,
-            vertices: corners,
+            vertices,
         }
     }
 
@@ -255,31 +260,33 @@ impl PolyMap {
         height: f64,
     ) -> (Vec<Vertex>, Vec<Edge>, Vec<Cell>) {
         let mut edges: Vec<Edge> = vec![];
-        let mut corners: Vec<Vertex> = vec![];
+        let mut vertices: Vec<Vertex> = vec![];
         let mut cells: Vec<Cell> = vec![];
 
         let mut edges_lookup: HashMap<_, EdgeId> = HashMap::new();
-        let mut corners_lookup: HashMap<_, VertexId> = HashMap::new();
+        let mut vertices_by_position: HashMap<_, VertexId> = HashMap::new();
 
         for (cell_id, polygon) in polygons.into_iter().enumerate() {
             let mut cell_edges = vec![];
 
-            let mut add_corner =
-                |edge_id: EdgeId, location: Location| match corners_lookup.get(&location) {
+            let mut add_vertex =
+                |edge_id: EdgeId, location: Location| match vertices_by_position.get(&location) {
                     Some(&id) => {
-                        let corner = &mut corners[id.0];
-                        corner.edges.push(edge_id);
-                        corner.edges.sort();
+                        let vertex = &mut vertices[id.0];
+                        if !vertex.edges.contains(&edge_id) {
+                            vertex.edges.push(edge_id);
+                            vertex.edges.sort();
+                        }
                         id
                     }
                     None => {
-                        let id = VertexId(corners.len());
-                        corners_lookup.insert(location, id);
+                        let id = VertexId(vertices.len());
+                        vertices_by_position.insert(location, id);
                         let is_border = location.0 <= 0.
                             || location.0 >= width
                             || location.1 <= 0.
                             || location.1 >= height;
-                        corners.push(Vertex::new(edge_id, location, is_border));
+                        vertices.push(Vertex::new(edge_id, location, is_border));
                         id
                     }
                 };
@@ -300,8 +307,8 @@ impl PolyMap {
                     None => {
                         let edge_id = EdgeId(edges.len());
                         edges_lookup.insert(endpoints, edge_id);
-                        let c1 = add_corner(edge_id, endpoints.min);
-                        let c2 = add_corner(edge_id, endpoints.max);
+                        let c1 = add_vertex(edge_id, endpoints.min);
+                        let c2 = add_vertex(edge_id, endpoints.max);
                         let mut edge = Edge::new(c1, c2);
                         edge.cells.push(cell_id);
                         cell_corners.push(edge.endpoints.min);
@@ -321,7 +328,7 @@ impl PolyMap {
             cells.push(Cell::new(polygon, cell_edges, cell_corners))
         }
 
-        (corners, edges, cells)
+        (vertices, edges, cells)
     }
 
     pub fn width(&self) -> usize {

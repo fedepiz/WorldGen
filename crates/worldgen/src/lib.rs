@@ -298,7 +298,7 @@ impl<'a> MapShader for WorldMapView<'a> {
         }
     }
 
-    fn draw_corners(&self) -> bool {
+    fn draw_vertices(&self) -> bool {
         match self.mode {
             ViewMode::Heightmap => true,
             ViewMode::Terrain => false,
@@ -307,11 +307,11 @@ impl<'a> MapShader for WorldMapView<'a> {
         }
     }
 
-    fn corner(&self, id: VertexId, corner: &Vertex) -> Option<Color> {
+    fn vertex(&self, id: VertexId, vertex: &Vertex) -> Option<Color> {
         match self.mode {
             ViewMode::Heightmap => {
                 let has_slope = self.world_map.heightmap.descent_vector(id).is_some();
-                if !has_slope && !corner.is_border() {
+                if !has_slope && !vertex.is_border() {
                     Some(Color::RED)
                 } else {
                     None

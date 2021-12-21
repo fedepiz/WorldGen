@@ -6,7 +6,8 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-raylib = { version = "*" }
+macroquad = "*"
+
 rand = { version = "*", features = ["small_rng"]}
 lyon = "*"
 fast_poisson = "*"

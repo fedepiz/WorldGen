@@ -1,6 +1,10 @@
 use super::*;
 
-pub use raylib::color::Color;
+pub use macroquad::prelude::Color;
+
+pub mod colors {
+    pub use macroquad::color::*;
+}
 
 pub trait MapShader {
     fn cell(&self, id: CellId) -> Color;
@@ -24,7 +28,7 @@ impl RandomColorShader {
         let colors: Vec<_> = poly
             .cells
             .iter()
-            .map(|_| Color::new(rng.gen(), rng.gen(), rng.gen(), u8::MAX))
+            .map(|_| Color::new(rng.gen(), rng.gen(), rng.gen(), 1.0))
             .collect();
         Self { colors }
     }

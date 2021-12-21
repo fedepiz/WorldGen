@@ -6,6 +6,8 @@ use rand::*;
 use polymap::map_shader::{Color, MapShader};
 use polymap::{compute::*, *};
 
+use polymap::map_shader::colors as colors;
+
 pub mod conf;
 mod generators;
 mod heightmap;
@@ -248,51 +250,51 @@ impl<'a> MapShader for WorldMapView<'a> {
         match self.mode {
             ViewMode::Heightmap => {
                 let height = self.world_map.heightmap.cell_height(id);
-                let intensity = (255.0 * height).max(0.0).min(255.0).round() as u8;
-                Color::new(intensity, intensity, intensity, 255)
+                let intensity = (height as f32).max(0.0).min(1.0);
+                Color::new(intensity, intensity, intensity, 1.0)
             }
             ViewMode::Terrain => {
                 let terrain_color = |terrain| match terrain {
-                    TerrainType::DeepWater => Color::DARKBLUE,
-                    TerrainType::Water => Color::BLUE,
-                    TerrainType::Land => Color::GREEN,
-                    TerrainType::Hill => Color::BROWN,
-                    TerrainType::Mountain => Color::WHITE,
+                    TerrainType::DeepWater => colors::DARKBLUE,
+                    TerrainType::Water => colors::BLUE,
+                    TerrainType::Land => colors::GREEN,
+                    TerrainType::Hill => colors::BROWN,
+                    TerrainType::Mountain => colors::WHITE,
                 };
 
                 let (tlower, theigher, t) =
                     TerrainType::from_height_range(self.world_map.heightmap.cell_height(id));
                 let clower = terrain_color(tlower);
                 let chigher = terrain_color(theigher);
-                interpolate_colors(clower, chigher, t)
+                interpolate_colors(clower, chigher, t as f32)
             }
             ViewMode::Hydrology => {
-                let rainfall = 100.0 * self.world_map.hydrology.cell_rainfall(id);
-                Color::new(0, 0, 255, rainfall.round().min(255.0) as u8)
+                let rainfall = (self.world_map.hydrology.cell_rainfall(id) * 100.0)/255.0;
+                Color::new(0.0, 0.0, 1.0, rainfall.min(1.0) as f32)
             }
             ViewMode::Thermology => {
                 let temperature = self.world_map.thermology.cell_temperature(id);
 
-                let t_value = temperature.max(0.0).min(1.0);
-                interpolate_three_colors(Color::DARKBLUE, Color::YELLOW, Color::RED, t_value)
+                let t_value = temperature.max(0.0).min(1.0) as f32;
+                interpolate_three_colors(colors::DARKBLUE, colors::YELLOW, colors::RED, t_value)
             }
         }
     }
 
     fn edge(&self, id: polymap::EdgeId, _: &Edge) -> Option<Color> {
         match self.mode {
-            ViewMode::Heightmap => Some(Color::BLACK),
+            ViewMode::Heightmap => Some(colors::BLACK),
             ViewMode::Terrain => {
                 if !self.world_map.hydrology.rivers().is_segment(id) {
                     return None;
                 }
-                let flow = self.world_map.hydrology.edge_flux(id);
-                Some(Color::new(0, 0, 255, flow.round().min(255.0) as u8))
+                let flow = self.world_map.hydrology.edge_flux(id)/100.0;
+                Some(Color::new(0.0, 0.0, 1.0, flow.min(1.0) as f32))
             }
             ViewMode::Hydrology => {
-                let flow = self.world_map.hydrology.edge_flux(id);
+                let flow = self.world_map.hydrology.edge_flux(id).min(255.0)/255.0;
 
-                Some(Color::new(0, 0, 255, flow.round().min(255.0) as u8))
+                Some(Color::new(0.0, 0.0, 1.0, flow.min(1.0) as f32))
             }
             ViewMode::Thermology => None,
         }
@@ -312,7 +314,7 @@ impl<'a> MapShader for WorldMapView<'a> {
             ViewMode::Heightmap => {
                 let has_slope = self.world_map.heightmap.descent_vector(id).is_some();
                 if !has_slope && !vertex.is_border() {
-                    Some(Color::RED)
+                    Some(colors::RED)
                 } else {
                     None
                 }
@@ -322,9 +324,9 @@ impl<'a> MapShader for WorldMapView<'a> {
                 let rivers = self.world_map.hydrology.rivers();
 
                 if rivers.is_source(id) {
-                    Some(Color::GREEN)
+                    Some(colors::GREEN)
                 } else if rivers.is_sink(id) {
-                    Some(Color::RED)
+                    Some(colors::RED)
                 } else {
                     None
                 }
@@ -334,7 +336,7 @@ impl<'a> MapShader for WorldMapView<'a> {
     }
 }
 
-fn interpolate_three_colors(c1: Color, c2: Color, c3: Color, t: f64) -> Color {
+fn interpolate_three_colors(c1: Color, c2: Color, c3: Color, t: f32) -> Color {
     if t <= 0.5 {
         interpolate_colors(c1, c2, 2. * t)
     } else {
@@ -342,7 +344,7 @@ fn interpolate_three_colors(c1: Color, c2: Color, c3: Color, t: f64) -> Color {
     }
 }
 
-fn interpolate_colors(c1: Color, c2: Color, t: f64) -> Color {
+fn interpolate_colors(c1: Color, c2: Color, t: f32) -> Color {
     Color::new(
         lerp8(c1.r, c2.r, t),
         lerp8(c1.g, c2.g, t),
@@ -351,6 +353,6 @@ fn interpolate_colors(c1: Color, c2: Color, t: f64) -> Color {
     )
 }
 
-fn lerp8(a: u8, b: u8, t: f64) -> u8 {
-    (((1.0 - t) * a as f64) + (t * b as f64)).round() as u8
+fn lerp8(a: f32, b: f32, t: f32) -> f32 {
+    ((1.0 - t) * a) + (t * b)
 }

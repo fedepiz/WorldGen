@@ -1,28 +1,25 @@
-use raylib::prelude::*;
+use macroquad::prelude::{self as mq, Vec2};
 
 use super::map_shader::MapShader;
 use super::*;
 
 
 pub struct Painter {
-    texture: RenderTexture2D,
+    render_target: mq::RenderTarget,
     validation: Validation,
     tessellation: Tessellation,
 }
 
 impl Painter {
     pub fn new(
-        rl: &mut RaylibHandle,
-        thread: &RaylibThread,
         polymap: &PolyMap,
     ) -> Result<Self, String> {
-        let texture =
-            rl.load_render_texture(thread, polymap.width as u32, polymap.height as u32)?;
+        let texture = mq::render_target( polymap.width as u32, polymap.height as u32);
 
         let tessellation = Tessellation::new(polymap);
 
         Ok(Self {
-            texture,
+            render_target: texture,
             tessellation,
             validation: Validation::Invalid,
         })
@@ -30,19 +27,17 @@ impl Painter {
 
     pub fn draw(
         &mut self,
-        ctx: &mut RaylibDrawHandle,
-        thread: &RaylibThread,
-        x: i32,
-        y: i32,
+        x: f32,
+        y: f32,
         poly_map: &PolyMap,
         shader: &impl MapShader,
     ) {
         if !self.validation.is_valid() {
-            self.draw_all(ctx, thread, poly_map, shader);
+            self.draw_all(poly_map, shader);
             self.validation = Validation::Valid;
         }
 
-        ctx.draw_texture(&self.texture, x, y, Color::WHITE);
+        mq::draw_texture(self.render_target.texture, x, y, mq::WHITE);
     }
 
     pub fn invalidate(&mut self, validation: Validation) {
@@ -51,58 +46,63 @@ impl Painter {
 
     pub fn draw_all(
         &mut self,
-        ctx: &mut RaylibDrawHandle,
-        thread: &RaylibThread,
         poly_map: &PolyMap,
         shader: &impl MapShader,
     ) {
-        if self.validation.is_valid() { return }
+            
+        let mut camera = mq::Camera2D::from_display_rect(mq::Rect::new(0.0, 0.0, 1600.0, 900.0));
+        camera.render_target = Some(self.render_target);
+        mq::set_camera(&camera);
+        {
 
-        let mut tctx = ctx.begin_texture_mode(&thread, &mut self.texture);
+        }
 
-        tctx.draw_rectangle(
-            0,
-            0,
-            poly_map.width as i32,
-            poly_map.height as i32,
-            Color::WHITE,
+
+        mq::draw_rectangle(
+            0.0,
+            0.0,
+            poly_map.width as f32,
+            poly_map.height as f32,
+            mq::WHITE,
         );
 
         {
-            self.tessellation.draw(&mut tctx, poly_map, shader);
-            Self::draw_edges(&mut tctx, poly_map, shader);
+            self.tessellation.draw(&poly_map, shader);
+            Self::draw_edges( poly_map, shader);
 
             if shader.draw_vertices() {
-                Self::draw_corners(&mut tctx, poly_map, shader);
+                Self::draw_corners(poly_map, shader);
             }
         };
+
+        mq::set_default_camera()
     }
 
-    fn draw_edges(ctx: &mut impl RaylibDraw, poly_map: &PolyMap, shader: &impl MapShader) {
+    fn draw_edges(poly_map: &PolyMap, shader: &impl MapShader) {
         for (id, edge) in poly_map.edges() {
             if let Some(color) = shader.edge(id, edge) {
                 let ((ax, ay), (bx, by)) = poly_map.edge_endpoints_coords(edge);
-                let start = Vector2::new(ax as f32, poly_map.height as f32 - ay as f32);
-                let end = Vector2::new(bx as f32, poly_map.height as f32 - by as f32);
+                let start = Vec2::new(ax as f32, poly_map.height as f32 - ay as f32);
+                let end = Vec2::new(bx as f32, poly_map.height as f32 - by as f32);
 
-                ctx.draw_line_ex(start, end, 1.0, color);
+                mq::draw_line(start.x, start.y, end.x, end.y, 1.0, color);
             }
         }
     }
 
-    fn draw_corners(ctx: &mut impl RaylibDraw, poly_map: &PolyMap, shader: &impl MapShader) {
+    fn draw_corners(poly_map: &PolyMap, shader: &impl MapShader) {
         for (id, corner) in poly_map.vertices() {
             if let Some(color) = shader.vertex(id, corner) {
                 let tile_halfsize = 2.0;
 
-                let half_size = Vector2::zero() + tile_halfsize;
-                let position = Vector2::new(
+                let half_size = Vec2::ZERO + Vec2::new(tile_halfsize,tile_halfsize);
+                let position = Vec2::new(
                     corner.x() as f32,
                     poly_map.height as f32 - corner.y() as f32,
                 ) - half_size;
                 let size = half_size * 2.0;
 
-                ctx.draw_rectangle_v(position, size, color);
+                mq::draw_rectangle(position.x, position.y, size.x, size.y, color);
             }
         }
     }
@@ -130,7 +130,7 @@ impl Validation {
 }
 
 struct Tessellation {
-    cells: Vec<Vec<[Vector2; 3]>>
+    cells: Vec<Vec<[Vec2; 3]>>
 }
 
 impl Tessellation {
@@ -169,7 +169,7 @@ impl Tessellation {
                 for triangle in geometry.indices.chunks(3) {
                     let make_vertex = |idx| {
                         let v: &lyon::math::Point = &geometry.vertices[triangle[idx] as usize];
-                        Vector2::new(v.x, v.y)
+                        Vec2::new(v.x, v.y)
                     };
                     triangles.push([
                         make_vertex(0), make_vertex(1), make_vertex(2)   
@@ -184,11 +184,11 @@ impl Tessellation {
         }
     }
 
-    pub fn draw<'a>(&self, ctx: &mut impl RaylibDraw, poly_map:&PolyMap, shader:&impl MapShader) {
+    pub fn draw<'a>(&self, poly_map:&PolyMap, shader:&impl MapShader) {
         for ((id, _), triangles) in poly_map.cells().zip(self.cells.iter()) {
             for triangle in triangles {
                 let color = shader.cell(id);
-                ctx.draw_triangle(triangle[0], triangle[1], triangle[2], color);
+                mq::draw_triangle(triangle[0], triangle[1], triangle[2], color);
             }
         }
     }

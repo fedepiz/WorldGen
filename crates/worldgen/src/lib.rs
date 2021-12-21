@@ -288,11 +288,11 @@ impl<'a> MapShader for WorldMapView<'a> {
                 if !self.world_map.hydrology.rivers().is_segment(id) {
                     return None;
                 }
-                let flow = self.world_map.hydrology.edge_flux(id)/100.0;
+                let flow = self.world_map.hydrology.edge_flux(id)/255.0;
                 Some(Color::new(0.0, 0.0, 1.0, flow.min(1.0) as f32))
             }
             ViewMode::Hydrology => {
-                let flow = self.world_map.hydrology.edge_flux(id).min(255.0)/255.0;
+                let flow = self.world_map.hydrology.edge_flux(id)/255.0;
 
                 Some(Color::new(0.0, 0.0, 1.0, flow.min(1.0) as f32))
             }

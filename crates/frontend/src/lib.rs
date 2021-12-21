@@ -1,4 +1,4 @@
-use polymap::painter::{Painter, Validation};
+use polymap::painter::{Validation};
 use ::rand::Rng;
 use worldgen::{conf::WorldGenConf, ViewMode, WorldGenerator};
 use macroquad::prelude::{KeyCode, MouseButton};
@@ -72,18 +72,16 @@ pub fn main(){
 
         let fps = format!("FPS: {}, Seed: {}", mq::get_fps(), seed);
 
+
+        mq::clear_background(mq::WHITE);
+
+
         polymap_texture.draw(
             0.0,
             0.0,
             &poly_map,
             &worldgen::WorldMapView::new(&world, world_view_mode),
         );
-        // mq::clear_background(mq::RED);
-        // mq::draw_line(40.0, 40.0, 100.0, 200.0, 15.0, mq::BLUE);
-        // mq::draw_rectangle(mq::screen_width() / 2.0 - 60.0, 100.0, 120.0, 60.0, mq::GREEN);
-        // mq::draw_circle(mq::screen_width() - 30.0, mq::screen_height() - 30.0, 15.0, mq::YELLOW);
-        // mq::draw_text("HELLO", 20.0, 20.0, 20.0, mq::DARKGRAY);
-
 
         mq::next_frame().await
         }

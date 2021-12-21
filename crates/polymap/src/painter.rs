@@ -53,10 +53,7 @@ impl Painter {
         let mut camera = mq::Camera2D::from_display_rect(mq::Rect::new(0.0, 0.0, 1600.0, 900.0));
         camera.render_target = Some(self.render_target);
         mq::set_camera(&camera);
-        {
-
-        }
-
+        
 
         mq::draw_rectangle(
             0.0,
@@ -71,7 +68,7 @@ impl Painter {
             Self::draw_edges( poly_map, shader);
 
             if shader.draw_vertices() {
-                Self::draw_corners(poly_map, shader);
+                Self::draw_vertices(poly_map, shader);
             }
         };
 
@@ -90,7 +87,7 @@ impl Painter {
         }
     }
 
-    fn draw_corners(poly_map: &PolyMap, shader: &impl MapShader) {
+    fn draw_vertices(poly_map: &PolyMap, shader: &impl MapShader) {
         for (id, corner) in poly_map.vertices() {
             if let Some(color) = shader.vertex(id, corner) {
                 let tile_halfsize = 2.0;

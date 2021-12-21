@@ -27,7 +27,7 @@ impl HeightMapBuilder {
         let epsilon = 0.001;
         let h = &mut self.vertices;
         let mut new_h =
-            VertexData::for_each(
+            VertexData::par_for_each(
                 poly_map,
                 |id, corner| {
                     if corner.is_border() {

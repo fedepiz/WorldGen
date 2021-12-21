@@ -564,6 +564,7 @@ dependencies = [
  "lyon",
  "rand 0.8.4",
  "raylib",
+ "rayon",
  "voronator",
 ]
 

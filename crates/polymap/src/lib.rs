@@ -81,8 +81,8 @@ impl Cell {
 
 pub struct Vertex {
     coords: (f64, f64),
-    edges: ArrayVec<[EdgeId; 4]>,
-    neighbors: ArrayVec<[VertexId; 4]>,
+    edges: ArrayVec<[EdgeId; 5]>,
+    neighbors: ArrayVec<[VertexId; 5]>,
     is_border: bool,
 }
 
@@ -93,6 +93,13 @@ impl Vertex {
             edges: { let mut v = ArrayVec::new(); v.push(edge); v},
             neighbors: ArrayVec::new(),
             is_border,
+        }
+    }
+
+    fn add_edge(&mut self, id: EdgeId) {
+        if !self.edges.contains(&id) {
+            self.edges.push (id);
+            self.edges.sort();
         }
     }
 
@@ -273,10 +280,7 @@ impl PolyMap {
                 |edge_id: EdgeId, location: Location| match vertices_by_position.get(&location) {
                     Some(&id) => {
                         let vertex = &mut vertices[id.0];
-                        if !vertex.edges.contains(&edge_id) {
-                            vertex.edges.push(edge_id);
-                            vertex.edges.sort();
-                        }
+                        vertex.add_edge(edge_id);
                         id
                     }
                     None => {

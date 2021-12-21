@@ -2,7 +2,7 @@ pub mod compute;
 pub mod map_shader;
 pub mod painter;
 
-use geo::{contains::Contains, coords_iter::CoordsIter, Polygon};
+use geo::{contains::Contains, Polygon};
 use std::collections::HashMap;
 
 #[derive(Clone, Copy, Debug, PartialOrd)]
@@ -41,7 +41,7 @@ impl Eq for Location {}
 pub struct CellId(usize);
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct CornerId(usize);
+pub struct VertexId(usize);
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct EdgeId(usize);
@@ -49,12 +49,12 @@ pub struct EdgeId(usize);
 pub struct Cell {
     polygon: Polygon<f64>,
     edges: Vec<EdgeId>,
-    corners: Vec<CornerId>,
+    corners: Vec<VertexId>,
     neighbors: Vec<CellId>,
 }
 
 impl Cell {
-    fn new(polygon: Polygon<f64>, edges: Vec<EdgeId>, corners: Vec<CornerId>) -> Self {
+    fn new(polygon: Polygon<f64>, edges: Vec<EdgeId>, corners: Vec<VertexId>) -> Self {
         Self {
             polygon,
             edges,
@@ -63,7 +63,7 @@ impl Cell {
         }
     }
 
-    pub fn corners(&self) -> &[CornerId] {
+    pub fn corners(&self) -> &[VertexId] {
         self.corners.as_slice()
     }
 
@@ -78,14 +78,14 @@ impl Cell {
     }
 }
 
-pub struct Corner {
+pub struct Vertex {
     coords: (f64, f64),
     edges: Vec<EdgeId>,
-    neighbors: Vec<CornerId>,
+    neighbors: Vec<VertexId>,
     is_border: bool,
 }
 
-impl Corner {
+impl Vertex {
     fn new(edge: EdgeId, location: Location, is_border: bool) -> Self {
         Self {
             coords: (location.0, location.1),
@@ -102,7 +102,7 @@ impl Corner {
         self.coords.1
     }
 
-    pub fn neighbors(&self) -> &[CornerId] {
+    pub fn neighbors(&self) -> &[VertexId] {
         self.neighbors.as_slice()
     }
 
@@ -131,22 +131,22 @@ impl Corner {
 }
 
 pub struct Edge {
-    endpoints: OrderedPair<CornerId>,
+    endpoints: OrderedPair<VertexId>,
     cells: Vec<CellId>,
 }
 
 impl Edge {
-    fn new(c1: CornerId, c2: CornerId) -> Self {
+    fn new(c1: VertexId, c2: VertexId) -> Self {
         Self {
             endpoints: OrderedPair::new(c1, c2),
             cells: vec![],
         }
     }
 
-    pub fn start(&self) -> CornerId {
+    pub fn start(&self) -> VertexId {
         self.endpoints.min
     }
-    pub fn end(&self) -> CornerId {
+    pub fn end(&self) -> VertexId {
         self.endpoints.max
     }
 
@@ -180,8 +180,7 @@ pub struct PolyMap {
     height: usize,
     cells: Vec<Cell>,
     edges: Vec<Edge>,
-    corners: Vec<Corner>,
-    cell_quadtree: quadtree_rs::Quadtree<u64, CellId>,
+    vertices: Vec<Vertex>,
 }
 
 impl PolyMap {
@@ -237,19 +236,6 @@ impl PolyMap {
         }        
 
 
-        let cell_quadtree = {
-            let mut cell_quadtree = {
-                let depth = ((width.max(height) as f64).log2().round()) as usize + 1;
-                quadtree_rs::Quadtree::new(depth)
-            };
-
-            for (idx, cell) in cells.iter().enumerate() {
-                let area = Self::polygon_area(&cell.polygon);
-                cell_quadtree.insert(area, CellId(idx));
-            }
-            cell_quadtree
-        };
-
         corners.iter_mut().for_each(|x| x.fix());
         edges.iter_mut().for_each(|x| x.fix());
         cells.iter_mut().for_each(|x| x.fix());
@@ -259,8 +245,7 @@ impl PolyMap {
             height,
             cells,
             edges,
-            corners,
-            cell_quadtree,
+            vertices: corners,
         }
     }
 
@@ -268,13 +253,13 @@ impl PolyMap {
         polygons: Vec<Polygon<f64>>,
         width: f64,
         height: f64,
-    ) -> (Vec<Corner>, Vec<Edge>, Vec<Cell>) {
+    ) -> (Vec<Vertex>, Vec<Edge>, Vec<Cell>) {
         let mut edges: Vec<Edge> = vec![];
-        let mut corners: Vec<Corner> = vec![];
+        let mut corners: Vec<Vertex> = vec![];
         let mut cells: Vec<Cell> = vec![];
 
         let mut edges_lookup: HashMap<_, EdgeId> = HashMap::new();
-        let mut corners_lookup: HashMap<_, CornerId> = HashMap::new();
+        let mut corners_lookup: HashMap<_, VertexId> = HashMap::new();
 
         for (cell_id, polygon) in polygons.into_iter().enumerate() {
             let mut cell_edges = vec![];
@@ -288,13 +273,13 @@ impl PolyMap {
                         id
                     }
                     None => {
-                        let id = CornerId(corners.len());
+                        let id = VertexId(corners.len());
                         corners_lookup.insert(location, id);
                         let is_border = location.0 <= 0.
                             || location.0 >= width
                             || location.1 <= 0.
                             || location.1 >= height;
-                        corners.push(Corner::new(edge_id, location, is_border));
+                        corners.push(Vertex::new(edge_id, location, is_border));
                         id
                     }
                 };
@@ -351,26 +336,12 @@ impl PolyMap {
             return None;
         }
 
-        let point = quadtree_rs::point::Point {
-            x: px.round() as u64,
-            y: py.round() as u64,
-        };
-        let area = quadtree_rs::area::AreaBuilder::default()
-            .anchor(point)
-            .dimensions((1, 1))
-            .build()
-            .unwrap();
-
-        let mut query = self.cell_quadtree.query(area);
 
         let point = geo::Point::new(px as f64, py as f64);
 
-        query
-            .find(|entry| {
-                let polygon = &self.cells[entry.value_ref().0].polygon;
-                polygon.contains(&point)
-            })
-            .map(|e| *e.value_ref())
+        self.cells()
+            .find(|&(_, cell)| cell.polygon.contains(&point))
+            .map(|(id, _)| id)
     }
 
     pub fn cells(&self) -> impl Iterator<Item = (CellId, &Cell)> {
@@ -387,63 +358,37 @@ impl PolyMap {
             .map(|(id, edge)| (EdgeId(id), edge))
     }
 
-    pub fn corners(&self) -> impl Iterator<Item = (CornerId, &Corner)> {
-        self.corners
+    pub fn vertices(&self) -> impl Iterator<Item = (VertexId, &Vertex)> {
+        self.vertices
             .iter()
             .enumerate()
-            .map(|(id, corner)| (CornerId(id), corner))
+            .map(|(id, corner)| (VertexId(id), corner))
     }
 
-    pub fn num_corners(&self) -> usize {
-        self.corners.len()
+    pub fn num_vertices(&self) -> usize {
+        self.vertices.len()
     }
 
     pub fn edge_endpoints_coords(&self, edge: &Edge) -> ((f64, f64), (f64, f64)) {
-        let c1 = self.corner(edge.endpoints.min);
-        let c2 = self.corner(edge.endpoints.max);
+        let c1 = self.vertex(edge.endpoints.min);
+        let c2 = self.vertex(edge.endpoints.max);
         (c1.coords, c2.coords)
     }
 
-    pub fn edge_between(&self, c1: CornerId, c2: CornerId) -> Option<EdgeId> {
+    pub fn edge_between(&self, c1: VertexId, c2: VertexId) -> Option<EdgeId> {
         let op = OrderedPair::new(c1, c2);
-        self.corners[op.min.0]
+        self.vertices[op.min.0]
             .edges()
             .iter()
             .copied()
             .find(|&edge_id| self.edges[edge_id.0].endpoints.max == op.max)
     }
 
-    pub fn corner(&self, id: CornerId) -> &Corner {
-        &self.corners[id.0]
+    pub fn vertex(&self, id: VertexId) -> &Vertex {
+        &self.vertices[id.0]
     }
 
     pub fn edge(&self, id: EdgeId) -> &Edge {
         &self.edges[id.0]
-    }
-
-    fn polygon_area(polygon: &Polygon<f64>) -> quadtree_rs::area::Area<u64> {
-        let mut min_x: f64 = 0.0;
-        let mut min_y: f64 = 0.0;
-        let mut max_x: f64 = 0.0;
-        let mut max_y: f64 = 0.0;
-
-        for p in polygon.exterior().coords_iter() {
-            min_x = min_x.min(p.x);
-            min_y = min_y.min(p.y);
-            max_x = max_x.max(p.x);
-            max_y = max_y.max(p.y);
-        }
-
-        let min_p = quadtree_rs::point::Point {
-            x: min_x.ceil() as u64,
-            y: min_y.ceil() as u64,
-        };
-        let max_p = (max_x.ceil() as u64, max_y.ceil() as u64);
-
-        quadtree_rs::area::AreaBuilder::default()
-            .anchor(min_p)
-            .dimensions(max_p)
-            .build()
-            .unwrap()
     }
 }

@@ -2,36 +2,36 @@ use super::*;
 use rand::Rng;
 use std::collections::HashSet;
 
-pub struct CornerPicker;
+pub struct VertexPicker;
 
-impl CornerPicker {
-    pub fn random(poly_map: &PolyMap, rng: &mut impl Rng) -> CornerId {
-        CornerId(rng.gen_range(0..poly_map.corners.len()))
+impl VertexPicker {
+    pub fn random(poly_map: &PolyMap, rng: &mut impl Rng) -> VertexId {
+        VertexId(rng.gen_range(0..poly_map.vertices.len()))
     }
 }
 
 #[derive(Clone)]
-pub struct CornerData<T> {
+pub struct VertexData<T> {
     pub data: Vec<T>,
 }
 
-impl<T> CornerData<T> {
+impl<T> VertexData<T> {
     pub fn empty_shell() -> Self {
         Self { data: vec![] }
     }
 
-    pub fn for_each(poly_map: &PolyMap, mut f: impl FnMut(CornerId, &Corner) -> T) -> Self {
+    pub fn for_each(poly_map: &PolyMap, mut f: impl FnMut(VertexId, &Vertex) -> T) -> Self {
         Self {
-            data: poly_map.corners().map(|(id, c)| f(id, c)).collect(),
+            data: poly_map.vertices().map(|(id, c)| f(id, c)).collect(),
         }
     }
 
     pub fn update_each(
         &mut self,
         poly_map: &PolyMap,
-        mut f: impl FnMut(CornerId, &Corner, &mut T),
+        mut f: impl FnMut(VertexId, &Vertex, &mut T),
     ) {
-        for ((corner_id, corner), data) in poly_map.corners().zip(self.data.iter_mut()) {
+        for ((corner_id, corner), data) in poly_map.vertices().zip(self.data.iter_mut()) {
             f(corner_id, corner, data)
         }
     }
@@ -39,10 +39,10 @@ impl<T> CornerData<T> {
     pub fn spread<U>(
         &mut self,
         poly_map: &PolyMap,
-        starting: CornerId,
+        starting: VertexId,
         mut accum: U,
         mut next: impl FnMut(U) -> Option<U>,
-        mut update: impl FnMut(CornerId, &mut T, &U),
+        mut update: impl FnMut(VertexId, &mut T, &U),
     ) {
         let mut visited = HashSet::new();
         let mut queue = vec![starting];
@@ -55,7 +55,7 @@ impl<T> CornerData<T> {
                 let node = queue.pop().unwrap();
                 update(node, &mut self.data[node.0], &accum);
 
-                for &neighbor in poly_map.corner(node).neighbors() {
+                for &neighbor in poly_map.vertex(node).neighbors() {
                     if !visited.contains(&neighbor) {
                         next_iteration.push(neighbor);
                         visited.insert(neighbor);
@@ -76,8 +76,8 @@ impl<T> CornerData<T> {
     pub fn ordered_by(
         &self,
         mut compare: impl FnMut(&T, &T) -> std::cmp::Ordering,
-    ) -> Vec<CornerId> {
-        let mut temporary: Vec<_> = (0..self.data.len()).map(CornerId).collect();
+    ) -> Vec<VertexId> {
+        let mut temporary: Vec<_> = (0..self.data.len()).map(VertexId).collect();
         temporary.sort_by(|&id1, &id2| {
             let t1 = &self.data[id1.0];
             let t2 = &self.data[id2.0];
@@ -88,11 +88,11 @@ impl<T> CornerData<T> {
     }
 }
 
-impl<T: Clone> CornerData<T> {
+impl<T: Clone> VertexData<T> {
     pub fn update_with_neighbors(&mut self, poly_map: &PolyMap, mut f: impl FnMut(&mut T, &[&T])) {
         let mut buf = vec![];
         let read_data = self.data.clone();
-        for (id, corner) in poly_map.corners() {
+        for (id, corner) in poly_map.vertices() {
             buf.clear();
             for &neighbor in corner.neighbors() {
                 buf.push(&read_data[neighbor.0]);
@@ -103,7 +103,7 @@ impl<T: Clone> CornerData<T> {
 
     pub fn flow(
         &mut self,
-        order: impl Iterator<Item = (CornerId, CornerId)>,
+        order: impl Iterator<Item = (VertexId, VertexId)>,
         mut update: impl FnMut(&mut T, &T),
     ) {
         for (from, to) in order {
@@ -114,7 +114,7 @@ impl<T: Clone> CornerData<T> {
     }
 }
 
-impl CornerData<f64> {
+impl VertexData<f64> {
     pub fn max(&self) -> f64 {
         self.data.iter().copied().reduce(f64::max).unwrap()
     }
@@ -124,14 +124,14 @@ impl CornerData<f64> {
     }
 }
 
-impl<T> std::ops::Index<CornerId> for CornerData<T> {
+impl<T> std::ops::Index<VertexId> for VertexData<T> {
     type Output = T;
-    fn index(&self, index: CornerId) -> &Self::Output {
+    fn index(&self, index: VertexId) -> &Self::Output {
         &self.data[index.0]
     }
 }
-impl<T> std::ops::IndexMut<CornerId> for CornerData<T> {
-    fn index_mut(&mut self, index: CornerId) -> &mut Self::Output {
+impl<T> std::ops::IndexMut<VertexId> for VertexData<T> {
+    fn index_mut(&mut self, index: VertexId) -> &mut Self::Output {
         &mut self.data[index.0]
     }
 }
@@ -157,7 +157,7 @@ impl<T> EdgeData<T> {
 
     pub fn from_corners_data<U>(
         poly_map: &PolyMap,
-        corners_data: &CornerData<U>,
+        corners_data: &VertexData<U>,
         mut combine: impl FnMut(EdgeId, &Edge, &U, &U) -> T,
     ) -> Self {
         let data: Vec<_> = poly_map
@@ -222,10 +222,10 @@ impl<T> CellData<T> {
         }
     }
 
-    pub fn from_corners_data<U>(
+    pub fn from_vertex_data<U>(
         poly_map: &PolyMap,
-        corners_data: &CornerData<U>,
-        mut f: impl FnMut(CellId, &Cell, &[(CornerId, &U)]) -> T,
+        corners_data: &VertexData<U>,
+        mut f: impl FnMut(CellId, &Cell, &[(VertexId, &U)]) -> T,
     ) -> Self {
         let mut buf = Vec::with_capacity(10);
 
@@ -279,8 +279,8 @@ impl<T> CellData<T> {
 }
 
 impl CellData<f64> {
-    pub fn corner_average(poly_map: &PolyMap, corners: &CornerData<f64>) -> Self {
-        CellData::from_corners_data(&poly_map, &corners, |_, _, c_data| {
+    pub fn vertex_average(poly_map: &PolyMap, corners: &VertexData<f64>) -> Self {
+        CellData::from_vertex_data(&poly_map, &corners, |_, _, c_data| {
             let total: f64 = c_data.iter().map(|(_, v)| **v).sum();
             let n = c_data.len() as f64;
             total / n

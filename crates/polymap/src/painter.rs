@@ -57,6 +57,8 @@ impl Painter {
         poly_map: &PolyMap,
         shader: &impl MapShader,
     ) {
+        if self.validation.is_valid() { return }
+
         let mut tctx = ctx.begin_texture_mode(&thread, &mut self.texture);
 
         tctx.draw_rectangle(
@@ -90,7 +92,7 @@ impl Painter {
     }
 
     fn draw_corners(ctx: &mut Handle, poly_map: &PolyMap, shader: &impl MapShader) {
-        for (id, corner) in poly_map.corners() {
+        for (id, corner) in poly_map.vertices() {
             if let Some(color) = shader.corner(id, corner) {
                 let tile_halfsize = 2.0;
 
@@ -127,8 +129,6 @@ impl Validation {
         }
     }
 }
-
-
 
 struct Tessellation {
     cells: Vec<Vec<[Vector2; 3]>>

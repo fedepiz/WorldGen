@@ -1,5 +1,5 @@
 use noise::Perlin;
-use polymap::{compute::CornerData, PolyMap};
+use polymap::{compute::VertexData, PolyMap};
 use rand::Rng;
 
 pub trait Field {
@@ -113,8 +113,8 @@ impl Field for Clump {
 }
 
 pub trait GridGenerator {
-    fn grid(&self) -> &CornerData<f64>;
-    fn grid_mut(&mut self) -> &mut CornerData<f64>;
+    fn grid(&self) -> &VertexData<f64>;
+    fn grid_mut(&mut self) -> &mut VertexData<f64>;
 
     fn add_field(&mut self, poly_map: &PolyMap, field: &impl Field, intensity: f64) {
         self.grid_mut().update_each(poly_map, |_, corner, h| {

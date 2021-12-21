@@ -4,30 +4,30 @@ use polymap::*;
 use crate::generators::GridGenerator;
 
 pub(crate) struct HeightMapBuilder {
-    corners: CornerData<f64>,
+    vertices: VertexData<f64>,
 }
 
 impl GridGenerator for HeightMapBuilder {
-    fn grid(&self) -> &CornerData<f64> {
-        &self.corners
+    fn grid(&self) -> &VertexData<f64> {
+        &self.vertices
     }
 
-    fn grid_mut(&mut self) -> &mut CornerData<f64> {
-        &mut self.corners
+    fn grid_mut(&mut self) -> &mut VertexData<f64> {
+        &mut self.vertices
     }
 }
 
 impl HeightMapBuilder {
     pub(crate) fn new(poly_map: &PolyMap, default: f64) -> Self {
-        let corners = CornerData::for_each(&poly_map, |_, _| default);
-        Self { corners }
+        let vertices = VertexData::for_each(&poly_map, |_, _| default);
+        Self { vertices }
     }
 
     pub fn planchon_darboux(&mut self, poly_map: &PolyMap) {
         let epsilon = 0.001;
-        let h = &mut self.corners;
+        let h = &mut self.vertices;
         let mut new_h =
-            CornerData::for_each(
+            VertexData::for_each(
                 poly_map,
                 |id, corner| {
                     if corner.is_border() {
@@ -41,7 +41,7 @@ impl HeightMapBuilder {
         let mut changed = true;
         while changed {
             changed = false;
-            for (id, corner) in poly_map.corners() {
+            for (id, corner) in poly_map.vertices() {
                 if new_h[id] == h[id] {
                     continue;
                 }
@@ -66,12 +66,12 @@ impl HeightMapBuilder {
     pub(super) fn build(mut self, poly_map: &PolyMap) -> HeightMap {
         self.normalize();
 
-        let descent_vector = CornerData::for_each(poly_map, |id, corner| {
-            let my_elevation = self.corners[id];
+        let descent_vector = VertexData::for_each(poly_map, |id, corner| {
+            let my_elevation = self.vertices[id];
             let mut slope: Option<Slope> = None;
 
             for &neighbor in corner.neighbors() {
-                let neighbor_elevation = self.corners[neighbor];
+                let neighbor_elevation = self.vertices[neighbor];
                 let diff = my_elevation - neighbor_elevation;
                 if diff > 0.0 {
                     let update = match slope {
@@ -89,7 +89,7 @@ impl HeightMapBuilder {
             slope
         });
 
-        let cells: CellData<f64> = CellData::corner_average(poly_map, &self.corners);
+        let cells: CellData<f64> = CellData::vertex_average(poly_map, &self.vertices);
 
         fn descending(x: &f64, y: &f64) -> std::cmp::Ordering {
             (if x < y {
@@ -102,10 +102,10 @@ impl HeightMapBuilder {
             .reverse()
         }
 
-        let downhill = self.corners.ordered_by(descending);
+        let downhill = self.vertices.ordered_by(descending);
 
         HeightMap {
-            corners: self.corners,
+            vertices: self.vertices,
             cells,
             descent_vector,
             downhill,
@@ -114,15 +114,15 @@ impl HeightMapBuilder {
 }
 #[derive(Clone)]
 pub struct HeightMap {
-    corners: CornerData<f64>,
+    vertices: VertexData<f64>,
     cells: CellData<f64>,
-    descent_vector: CornerData<Option<Slope>>,
-    downhill: Vec<CornerId>,
+    descent_vector: VertexData<Option<Slope>>,
+    downhill: Vec<VertexId>,
 }
 
 impl HeightMap {
-    pub fn corner_height(&self, id: CornerId) -> f64 {
-        self.corners[id]
+    pub fn vertex_height(&self, id: VertexId) -> f64 {
+        self.vertices[id]
     }
 
     pub fn cell_height(&self, id: CellId) -> f64 {
@@ -130,20 +130,20 @@ impl HeightMap {
     }
 
     /// True if there is a slope going from a to b
-    pub fn is_descent(&self, top: CornerId, bottom: CornerId) -> bool {
+    pub fn is_descent(&self, top: VertexId, bottom: VertexId) -> bool {
         self.descent_vector[top]
             .as_ref()
             .map(|x| x.towards == bottom)
             .unwrap_or(false)
     }
 
-    pub fn descent_vector(&self, id: CornerId) -> Option<&Slope> {
+    pub fn descent_vector(&self, id: VertexId) -> Option<&Slope> {
         self.descent_vector[id].as_ref()
     }
 
-    pub fn edge_high_corner(&self, edge: &Edge) -> Option<CornerId> {
-        let s = self.corners[edge.start()];
-        let e = self.corners[edge.end()];
+    pub fn edge_high_corner(&self, edge: &Edge) -> Option<VertexId> {
+        let s = self.vertices[edge.start()];
+        let e = self.vertices[edge.end()];
         if s > e {
             Some(edge.start())
         } else if e > s {
@@ -153,9 +153,9 @@ impl HeightMap {
         }
     }
 
-    pub fn edge_low_corner(&self, edge: &Edge) -> Option<CornerId> {
-        let s = self.corners[edge.start()];
-        let e = self.corners[edge.end()];
+    pub fn edge_low_corner(&self, edge: &Edge) -> Option<VertexId> {
+        let s = self.vertices[edge.start()];
+        let e = self.vertices[edge.end()];
         if s < e {
             Some(edge.start())
         } else if e < s {
@@ -167,7 +167,7 @@ impl HeightMap {
 
     /// Returns an iterator over pairs of corners a -> b, which follow the downhill slope
     /// of each vector. The paths are not joind though
-    pub(crate) fn downhill_flow(&self) -> impl Iterator<Item = (CornerId, CornerId)> + '_ {
+    pub(crate) fn downhill_flow(&self) -> impl Iterator<Item = (VertexId, VertexId)> + '_ {
         self.downhill
             .iter()
             .copied()
@@ -175,7 +175,7 @@ impl HeightMap {
     }
 
     // Starting from the given corner, walks downhill, recording all corner touched
-    pub(crate) fn downhill_path(&self, corner: CornerId) -> DownhillPath {
+    pub(crate) fn downhill_path(&self, corner: VertexId) -> DownhillPath {
         DownhillPath {
             node: corner,
             hm: self,
@@ -184,20 +184,20 @@ impl HeightMap {
 
     pub(crate) fn make_builder(&self) -> HeightMapBuilder {
         HeightMapBuilder {
-            corners: self.corners.clone(),
+            vertices: self.vertices.clone(),
         }
     }
 }
 
 pub(crate) struct DownhillPath<'a> {
-    node: CornerId,
+    node: VertexId,
     hm: &'a HeightMap,
 }
 
 impl<'a> Iterator for DownhillPath<'a> {
-    type Item = CornerId;
+    type Item = VertexId;
 
-    fn next(&mut self) -> Option<CornerId> {
+    fn next(&mut self) -> Option<VertexId> {
         let slope = self.hm.descent_vector(self.node);
         if let Some(slope) = slope {
             let mut next = slope.towards;
@@ -211,6 +211,6 @@ impl<'a> Iterator for DownhillPath<'a> {
 
 #[derive(Clone, Copy)]
 pub struct Slope {
-    pub towards: CornerId,
+    pub towards: VertexId,
     pub intensity: f64,
 }

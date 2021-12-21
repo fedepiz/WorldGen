@@ -307,7 +307,7 @@ impl<'a> MapShader for WorldMapView<'a> {
         }
     }
 
-    fn corner(&self, id: CornerId, corner: &Corner) -> Option<Color> {
+    fn corner(&self, id: VertexId, corner: &Vertex) -> Option<Color> {
         match self.mode {
             ViewMode::Heightmap => {
                 let has_slope = self.world_map.heightmap.descent_vector(id).is_some();

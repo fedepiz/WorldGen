@@ -7,19 +7,19 @@ use crate::generators::GridGenerator;
 use crate::{HeightMap, TerrainType};
 
 pub(crate) struct HydrologyBuilder {
-    corner_rainfall: CornerData<f64>,
+    corner_rainfall: VertexData<f64>,
 }
 
 impl HydrologyBuilder {
     pub fn new(poly_map: &PolyMap) -> Self {
         Self {
-            corner_rainfall: CornerData::for_each(poly_map, |_, _| 0.0),
+            corner_rainfall: VertexData::for_each(poly_map, |_, _| 0.0),
         }
     }
 
     pub fn scale_by_height(&mut self, poly_map: &PolyMap, hm: &HeightMap, coeff: f64) {
         self.corner_rainfall.update_each(poly_map, |id, _, h| {
-            let height = hm.corner_height(id);
+            let height = hm.vertex_height(id);
             *h += height * coeff
         })
     }
@@ -38,11 +38,11 @@ impl HydrologyBuilder {
 }
 
 impl GridGenerator for HydrologyBuilder {
-    fn grid(&self) -> &CornerData<f64> {
+    fn grid(&self) -> &VertexData<f64> {
         &self.corner_rainfall
     }
 
-    fn grid_mut(&mut self) -> &mut CornerData<f64> {
+    fn grid_mut(&mut self) -> &mut VertexData<f64> {
         &mut self.corner_rainfall
     }
 }
@@ -50,22 +50,22 @@ impl GridGenerator for HydrologyBuilder {
 pub struct Hydrology {
     // Innate data
     min_river_flux: f64,
-    corner_rainfall: CornerData<f64>,
+    vertex_rainfall: VertexData<f64>,
 
     // Computed data
     cell_rainfall: CellData<f64>,
-    corner_flux: CornerData<f64>,
+    vertex_flux: VertexData<f64>,
     edge_flux: EdgeData<f64>,
     rivers: Rivers,
 }
 
 impl Hydrology {
-    fn new(min_river_flux: f64, corner_rainfall: CornerData<f64>) -> Self {
+    fn new(min_river_flux: f64, vertex_rainfall: VertexData<f64>) -> Self {
         Self {
             min_river_flux,
-            corner_rainfall,
+            vertex_rainfall,
             cell_rainfall: CellData::empty_shell(),
-            corner_flux: CornerData::empty_shell(),
+            vertex_flux: VertexData::empty_shell(),
             edge_flux: EdgeData::empty_shell(),
             rivers: Rivers::new(),
         }
@@ -77,10 +77,10 @@ impl Hydrology {
         height_map: &HeightMap,
         terrain: &CellData<TerrainType>,
     ) {
-        self.cell_rainfall = CellData::corner_average(poly_map, &self.corner_rainfall);
+        self.cell_rainfall = CellData::vertex_average(poly_map, &self.vertex_rainfall);
 
-        self.corner_flux = {
-            let mut corner_flux = self.corner_rainfall.clone();
+        self.vertex_flux = {
+            let mut corner_flux = self.vertex_rainfall.clone();
             corner_flux.flow(height_map.downhill_flow(), |x, y| {
                 *x += *y;
             });
@@ -90,10 +90,10 @@ impl Hydrology {
         self.edge_flux = EdgeData::for_each(poly_map, |_, edge| {
             let mut flux = 0.0;
             if height_map.is_descent(edge.start(), edge.end()) {
-                flux += self.corner_flux[edge.start()]
+                flux += self.vertex_flux[edge.start()]
             }
             if height_map.is_descent(edge.end(), edge.start()) {
-                flux += self.corner_flux[edge.end()]
+                flux += self.vertex_flux[edge.end()]
             }
             flux
         });
@@ -107,8 +107,8 @@ impl Hydrology {
         );
     }
 
-    pub fn corner_flux(&self, corner: CornerId) -> f64 {
-        self.corner_flux[corner]
+    pub fn vertex_flux(&self, corner: VertexId) -> f64 {
+        self.vertex_flux[corner]
     }
 
     pub fn edge_flux(&self, edge: EdgeId) -> f64 {
@@ -154,7 +154,7 @@ impl Rivers {
             if edge_is_river[id] {
                 if let Some(top) = height_map.edge_high_corner(edge) {
                     let is_source = poly_map
-                        .corner(top)
+                        .vertex(top)
                         .edges()
                         .iter()
                         .all(|&other_id| id == other_id || !edge_is_river[other_id]);
@@ -172,7 +172,7 @@ impl Rivers {
                     .downhill_path(source)
                     .take_while(|&corner| {
                         poly_map
-                            .corner(corner)
+                            .vertex(corner)
                             .edges()
                             .iter()
                             .any(|&edge| edge_is_river[edge])
@@ -196,11 +196,11 @@ impl Rivers {
         self.edge_is_river[edge]
     }
 
-    pub fn is_source(&self, corner: CornerId) -> bool {
+    pub fn is_source(&self, corner: VertexId) -> bool {
         self.paths.iter().any(|path| path.source() == corner)
     }
 
-    pub fn is_sink(&self, corner: CornerId) -> bool {
+    pub fn is_sink(&self, corner: VertexId) -> bool {
         self.paths.iter().any(|path| path.sink() == corner)
     }
 
@@ -210,17 +210,17 @@ impl Rivers {
 }
 
 pub struct RiverPath {
-    path: Vec<CornerId>,
+    path: Vec<VertexId>,
 }
 
 impl RiverPath {
-    pub fn source(&self) -> CornerId {
+    pub fn source(&self) -> VertexId {
         *self.path.first().unwrap()
     }
-    pub fn sink(&self) -> CornerId {
+    pub fn sink(&self) -> VertexId {
         *self.path.last().unwrap()
     }
-    pub fn corners(&self) -> &[CornerId] {
+    pub fn corners(&self) -> &[VertexId] {
         &self.path
     }
 }

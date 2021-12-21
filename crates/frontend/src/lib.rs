@@ -16,7 +16,7 @@ const VIEW_MODES: &'static [(worldgen::ViewMode, KeyCode)] = &[
 
 pub fn main() {
     let mut config = mq::Conf::default();
-    config.high_dpi = true;
+    config.high_dpi = false;
     config.window_width = WIDTH;
     config.window_height = HEIGHT;
     config.window_title = "Worldgen".to_owned();
@@ -36,6 +36,7 @@ pub fn main() {
         let mut polymap_texture = polymap::painter::Painter::new(&poly_map).unwrap();
 
         let mut show_gui = false;
+        let mut image_caching = true;
 
         loop {
             if mq::is_key_pressed(KeyCode::G) {
@@ -78,6 +79,10 @@ pub fn main() {
 
             mq::clear_background(mq::WHITE);
 
+            if !image_caching {
+                polymap_texture.invalidate(Validation::Invalid);
+            }
+
             polymap_texture.draw(
                 0.0,
                 0.0,
@@ -85,35 +90,74 @@ pub fn main() {
                 &worldgen::WorldMapView::new(&world, world_view_mode),
             );
 
-            // Process keys, mouse etc.
-            egui_macroquad::ui(|egui_ctx| {
-                egui::Window::new("Toolbox")
-                    .open(&mut show_gui)
-                    .show(egui_ctx, |ui| {
-                        ui.label(&format!("FPS: {}", mq::get_fps()));
-                        ui.horizontal_top(|ui| {
-                            for &(mode, _) in VIEW_MODES {
-                                let selected = world_view_mode == mode;
-                                let text_color = if selected {
-                                    egui::Color32::RED
-                                } else {
-                                    egui::Color32::WHITE
-                                };
-
-                                if ui
-                                    .add(egui::Button::new(mode.name()).text_color(text_color))
-                                    .clicked() {
-                                    world_view_mode = mode;
-                                }
-                            }
-                        })
-                    });
-            });
-
-            // Draw things before egui
-            egui_macroquad::draw();
+            if show_gui {
+                let events = gui(seed, &world_view_mode, image_caching);
+                for event in events {
+                    match event {
+                        GuiEvent::Close => {
+                            show_gui = false;
+                        }
+                        GuiEvent::ChangeMode(mode) => {
+                            world_view_mode = mode;
+                            polymap_texture.invalidate(Validation::Invalid)
+                        }
+                        GuiEvent::SetWorldTextureCaching(b) => {
+                            image_caching = b;
+                        }
+                    }
+                }
+            }
 
             mq::next_frame().await
         }
     });
+}
+
+
+enum GuiEvent {
+    Close,
+    ChangeMode(ViewMode),
+    SetWorldTextureCaching(bool),
+}
+
+fn gui(seed:u64, world_view_mode: &ViewMode, mut image_caching: bool) -> Vec<GuiEvent> {
+    let mut events = vec![];
+    let mut show_gui = true;
+     // Process keys, mouse etc.
+     egui_macroquad::ui(|egui_ctx| {
+        egui::Window::new("Hello!....Colleague")
+            .open(&mut show_gui)
+            .show(egui_ctx, |ui| {
+                ui.label(&format!("Seed: {}", seed));
+                ui.label(&format!("FPS: {}", mq::get_fps()));
+                if ui.checkbox(&mut image_caching, "Image Caching").clicked() {
+                    events.push(GuiEvent::SetWorldTextureCaching(image_caching));
+                }
+                ui.horizontal_top(|ui| {
+                    for (mode, _) in VIEW_MODES {
+                        let selected = world_view_mode == mode;
+                        let text_color = if selected {
+                            egui::Color32::RED
+                        } else {
+                            egui::Color32::WHITE
+                        };
+
+                        if ui
+                            .add(egui::Button::new(mode.name()).text_color(text_color))
+                            .clicked() {
+                                events.push(GuiEvent::ChangeMode(*mode));
+                        }
+                    }
+                })
+            });
+    });
+
+    // Draw things before egui
+    egui_macroquad::draw();
+
+    if !show_gui {
+        events.push(GuiEvent::Close);
+    }
+
+    events
 }

@@ -8,10 +8,10 @@ edition = "2021"
 [dependencies]
 macroquad = "*"
 
-rand = { version = "*", features = ["small_rng"]}
-lyon = "*"
+rand = { version = "0.8.*", features = ["small_rng"]}
+
 fast_poisson = "*"
 voronator = "*"
-geo = "*"
-arrayvec = "*"
-rayon = "*"
+geo = "0.18"
+arrayvec = "0.7"
+rayon = "1.5"

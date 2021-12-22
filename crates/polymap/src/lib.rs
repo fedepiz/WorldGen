@@ -1,6 +1,5 @@
 pub mod compute;
 pub mod map_shader;
-pub mod painter;
 
 use arrayvec::ArrayVec;
 use geo::{contains::Contains, Polygon};
@@ -64,9 +63,9 @@ impl Cell {
         }
     }
 
-    pub fn corners(&self) -> &[VertexId] {
-        self.corners.as_slice()
-    }
+    pub fn polygon(&self) -> &Polygon<f64> { &self.polygon }
+
+    pub fn corners(&self) -> &[VertexId] { self.corners.as_slice() }
 
     pub fn neighbors(&self) -> &[CellId] {
         self.neighbors.as_slice()
@@ -81,8 +80,8 @@ impl Cell {
 
 pub struct Vertex {
     coords: (f64, f64),
-    edges: ArrayVec<[EdgeId; 5]>,
-    neighbors: ArrayVec<[VertexId; 5]>,
+    edges: ArrayVec<EdgeId,5>,
+    neighbors: ArrayVec<VertexId, 5>,
     is_border: bool,
 }
 
@@ -144,7 +143,7 @@ impl Vertex {
 
 pub struct Edge {
     endpoints: OrderedPair<VertexId>,
-    cells: ArrayVec<[CellId; 2]>,
+    cells: ArrayVec<CellId, 2>,
 }
 
 impl Edge {

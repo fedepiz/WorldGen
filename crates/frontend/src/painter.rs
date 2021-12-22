@@ -1,7 +1,7 @@
 use macroquad::prelude::{self as mq, Vec2};
 
-use super::map_shader::MapShader;
-use super::*;
+use polymap::map_shader::MapShader;
+use polymap::*;
 
 pub struct Painter {
     render_target: mq::RenderTarget,
@@ -11,7 +11,7 @@ pub struct Painter {
 
 impl Painter {
     pub fn new(polymap: &PolyMap) -> Result<Self, String> {
-        let texture = mq::render_target(polymap.width as u32, polymap.height as u32);
+        let texture = mq::render_target(polymap.width() as u32, polymap.height() as u32);
 
         let tessellation = Tessellation::new(polymap);
 
@@ -45,8 +45,8 @@ impl Painter {
         mq::draw_rectangle(
             0.0,
             0.0,
-            poly_map.width as f32,
-            poly_map.height as f32,
+            poly_map.width() as f32,
+            poly_map.height() as f32,
             mq::WHITE,
         );
 
@@ -66,8 +66,8 @@ impl Painter {
         for (id, edge) in poly_map.edges() {
             if let Some(color) = shader.edge(id, edge) {
                 let ((ax, ay), (bx, by)) = poly_map.edge_endpoints_coords(edge);
-                let start = Vec2::new(ax as f32, poly_map.height as f32 - ay as f32);
-                let end = Vec2::new(bx as f32, poly_map.height as f32 - by as f32);
+                let start = Vec2::new(ax as f32, poly_map.height() as f32 - ay as f32);
+                let end = Vec2::new(bx as f32, poly_map.height() as f32 - by as f32);
 
                 mq::draw_line(start.x, start.y, end.x, end.y, 1.0, color);
             }
@@ -82,7 +82,7 @@ impl Painter {
                 let half_size = Vec2::ZERO + Vec2::new(tile_halfsize, tile_halfsize);
                 let position = Vec2::new(
                     corner.x() as f32,
-                    poly_map.height as f32 - corner.y() as f32,
+                    poly_map.height() as f32 - corner.y() as f32,
                 ) - half_size;
                 let size = half_size * 2.0;
 
@@ -131,10 +131,10 @@ impl Tessellation {
             let mut tessellator = FillTessellator::new();
             for (_, cell) in poly_map.cells() {
                 let points: Vec<_> = cell
-                    .polygon
+                    .polygon()
                     .exterior()
                     .points_iter()
-                    .map(|p| lyon::geom::point(p.x() as f32, poly_map.height as f32 - p.y() as f32))
+                    .map(|p| lyon::geom::point(p.x() as f32, poly_map.height() as f32 - p.y() as f32))
                     .collect();
                 let polygon = lyon::path::Polygon {
                     points: points.as_slice(),

@@ -1,8 +1,11 @@
 use ::rand::Rng;
 use macroquad::prelude as mq;
 use macroquad::prelude::{KeyCode, MouseButton};
-use polymap::painter::Validation;
 use worldgen::{conf::WorldGenConf, view::*, WorldGenerator};
+
+mod painter;
+
+
 
 const WIDTH: i32 = 1600;
 const HEIGHT: i32 = 900;
@@ -33,7 +36,7 @@ pub fn main() {
         let mut world = world_gen.generate(&poly_map, seed);
         let mut world_view_mode = ViewMode::Heightmap;
 
-        let mut polymap_texture = polymap::painter::Painter::new(&poly_map).unwrap();
+        let mut polymap_texture = painter::Painter::new(&poly_map).unwrap();
 
         let mut show_gui = false;
         let mut image_caching = true;
@@ -42,17 +45,17 @@ pub fn main() {
             if mq::is_key_pressed(KeyCode::G) {
                 seed = rand::thread_rng().gen();
                 world = world_gen.generate(&poly_map, seed);
-                polymap_texture.invalidate(Validation::Invalid)
+                polymap_texture.invalidate(painter::Validation::Invalid)
             }
             if mq::is_key_pressed(KeyCode::R) {
                 world_gen = make_world_gen();
                 seed = rand::thread_rng().gen();
                 world = world_gen.generate(&poly_map, seed);
-                polymap_texture.invalidate(Validation::Invalid)
+                polymap_texture.invalidate(painter::Validation::Invalid)
             }
             if mq::is_key_down(KeyCode::F) {
                 world.reflow_rivers(&poly_map);
-                polymap_texture.invalidate(Validation::Invalid)
+                polymap_texture.invalidate(painter::Validation::Invalid)
             }
 
             if mq::is_key_pressed(KeyCode::Space) {
@@ -67,7 +70,7 @@ pub fn main() {
                 }
             }) {
                 world_view_mode = mode;
-                polymap_texture.invalidate(Validation::Invalid)
+                polymap_texture.invalidate(painter::Validation::Invalid)
             }
 
             if mq::is_mouse_button_pressed(MouseButton::Left) {
@@ -80,7 +83,7 @@ pub fn main() {
             mq::clear_background(mq::WHITE);
 
             if !image_caching {
-                polymap_texture.invalidate(Validation::Invalid);
+                polymap_texture.invalidate(painter::Validation::Invalid);
             }
 
             polymap_texture.draw(
@@ -99,7 +102,7 @@ pub fn main() {
                         }
                         GuiEvent::ChangeMode(mode) => {
                             world_view_mode = mode;
-                            polymap_texture.invalidate(Validation::Invalid)
+                            polymap_texture.invalidate(painter::Validation::Invalid)
                         }
                         GuiEvent::SetWorldTextureCaching(b) => {
                             image_caching = b;

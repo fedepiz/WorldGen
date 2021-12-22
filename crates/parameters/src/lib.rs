@@ -18,6 +18,7 @@ pub struct Info<T:Space> {
     pub name: String,
     pub min: Option<f64>,
     pub max: Option<f64>,
+    pub logarithmic: bool,
 }
 
 pub struct Parameters<T:Space> {

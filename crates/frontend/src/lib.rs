@@ -43,7 +43,8 @@ pub fn main() {
             tag: worldgen::Param::RainToRiver,
             name: "Rain to River".to_string(),
             min: Some(0.0),
-            max: Some(0.1)
+            max: Some(0.1),
+            logarithmic: true,
         }, 0.010);
 
         parameters.define(parameters::Info {
@@ -51,6 +52,7 @@ pub fn main() {
             name: "River Cutoff".to_string(),
             min: Some(0.0),
             max: Some(1.0),
+            logarithmic: false,
         }, conf.hydrology.min_river_flux.into());
 
         let mut world_gen = WorldGenerator::new(conf, parameters);

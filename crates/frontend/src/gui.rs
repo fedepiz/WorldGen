@@ -1,5 +1,5 @@
 use parameters::ParamId;
-use worldgen::view::ViewMode;
+use worldgen::{view::ViewMode, WorldParams};
 
 use crate::VIEW_MODES;
 
@@ -21,14 +21,11 @@ pub(crate) fn gui(seed:u64,
     let mut events = vec![];
     let mut show_gui = true;
 
-    let mut rainfall_to_river = parameters.get(&worldgen::Param::RainToRiver);
-    let mut river_cutoff = parameters.get(&worldgen::Param::RiverCutoff);
-
     let mut pointer_over_gui = false;
 
      // Process keys, mouse etc.
      egui_macroquad::ui(|egui_ctx| {
-        egui::Window::new("Hello!....Colleague")
+        egui::Window::new("Toolbox")
             .open(&mut show_gui)
             .show(egui_ctx, |ui| {
                 pointer_over_gui = egui_ctx.is_pointer_over_area();
@@ -54,29 +51,8 @@ pub(crate) fn gui(seed:u64,
                     }
                 });
 
-                ui.horizontal(|ui| {
-                    let id = parameters.lookup(&worldgen::Param::RainToRiver);
-                    let info = parameters.info(id);
-                    ui.label(info.name.as_str());
-                    
-                    let range = info.min.unwrap()..=info.max.unwrap();
-                    if ui.add(
-                        egui::widgets::Slider::new(&mut rainfall_to_river, range)
-                            .logarithmic(true)
-                    ).changed() {
-                        events.push(GuiEvent::ChangeParam(id, rainfall_to_river.into()))
-                    }
-                });
-
-                ui.horizontal(|ui| {
-                    let id = parameters.lookup(&worldgen::Param::RiverCutoff);
-                    let info = parameters.info(id);
-                    ui.label(info.name.as_str());
-                    
-                    if ui.add(egui::widgets::Slider::new(&mut river_cutoff, info.min.unwrap()..=info.max.unwrap())).changed() {
-                        events.push(GuiEvent::ChangeParam(id, river_cutoff.into()))
-                    }
-                })
+                edit_parameter(ui, &mut events, parameters, &worldgen::Param::RainToRiver);
+                edit_parameter(ui, &mut events, parameters, &worldgen::Param::RiverCutoff);
             });
 
     });
@@ -89,4 +65,24 @@ pub(crate) fn gui(seed:u64,
     }
 
     (pointer_over_gui, events)
+}
+
+fn edit_parameter(ui:&mut egui::Ui, 
+                  events: &mut Vec<GuiEvent>,
+                  parameters:&parameters::Parameters<WorldParams>, 
+                  tag: &worldgen::Param) {
+    ui.horizontal(|ui| {
+        let id = parameters.lookup(tag);
+        let info = parameters.info(id);
+        let mut value = parameters[id];
+        ui.label(info.name.as_str());
+        let range = info.min.unwrap()..=info.max.unwrap();
+        
+        let slider = egui::widgets::Slider::new(&mut value, range)
+            .logarithmic(info.logarithmic);
+
+        if ui.add(slider).changed() {
+            events.push(GuiEvent::ChangeParam(id, value))
+        }
+    });
 }

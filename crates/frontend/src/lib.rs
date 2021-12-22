@@ -2,12 +2,12 @@ use ::rand::Rng;
 use macroquad::prelude as mq;
 use macroquad::prelude::{KeyCode, MouseButton};
 use polymap::painter::Validation;
-use worldgen::{conf::WorldGenConf, ViewMode, WorldGenerator};
+use worldgen::{conf::WorldGenConf, view::*, WorldGenerator};
 
 const WIDTH: i32 = 1600;
 const HEIGHT: i32 = 900;
 
-const VIEW_MODES: &'static [(worldgen::ViewMode, KeyCode)] = &[
+const VIEW_MODES: &'static [(ViewMode, KeyCode)] = &[
     (ViewMode::Heightmap, KeyCode::Key1),
     (ViewMode::Terrain, KeyCode::Key2),
     (ViewMode::Hydrology, KeyCode::Key3),
@@ -31,7 +31,7 @@ pub fn main() {
         let mut world_gen = make_world_gen();
         let poly_map = polymap::PolyMap::new(WIDTH as usize, HEIGHT as usize, 8.0);
         let mut world = world_gen.generate(&poly_map, seed);
-        let mut world_view_mode = worldgen::ViewMode::Heightmap;
+        let mut world_view_mode = ViewMode::Heightmap;
 
         let mut polymap_texture = polymap::painter::Painter::new(&poly_map).unwrap();
 
@@ -87,7 +87,7 @@ pub fn main() {
                 0.0,
                 0.0,
                 &poly_map,
-                &worldgen::WorldMapView::new(&world, world_view_mode),
+                &WorldMapView::new(&world, world_view_mode),
             );
 
             if show_gui {

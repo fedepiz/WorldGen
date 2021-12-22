@@ -381,6 +381,7 @@ dependencies = [
  "egui-macroquad",
  "lyon",
  "macroquad",
+ "parameters",
  "polymap",
  "rand 0.8.4",
  "serde",
@@ -927,6 +928,10 @@ checksum = "65ee3f72636e6f164cc41c9f9057f4e58c4e13507699ea7f5e5242b64b8198ee"
 dependencies = [
  "ttf-parser 0.13.4",
 ]
+
+[[package]]
+name = "parameters"
+version = "0.1.0"
 
 [[package]]
 name = "pdqselect"
@@ -1624,6 +1629,7 @@ name = "worldgen"
 version = "0.1.0"
 dependencies = [
  "noise",
+ "parameters",
  "polymap",
  "rand 0.8.4",
  "serde",

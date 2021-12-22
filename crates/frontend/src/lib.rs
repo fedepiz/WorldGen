@@ -1,10 +1,13 @@
+use parameters::Space;
 use ::rand::Rng;
 use macroquad::prelude as mq;
 use macroquad::prelude::{KeyCode, MouseButton};
 use worldgen::{conf::WorldGenConf, view::*, WorldGenerator};
 
-mod painter;
+use gui::GuiEvent;
 
+mod painter;
+mod gui;
 
 
 const WIDTH: i32 = 1600;
@@ -19,19 +22,29 @@ const VIEW_MODES: &'static [(ViewMode, KeyCode)] = &[
 
 pub fn main() {
     let mut config = mq::Conf::default();
-    config.high_dpi = false;
+    config.high_dpi = true;
     config.window_width = WIDTH;
     config.window_height = HEIGHT;
     config.window_title = "Worldgen".to_owned();
+
+
     macroquad::Window::from_config(config, async {
         let mut seed = 27049319951022;
 
-        let make_world_gen = || {
-            let file = std::fs::read_to_string("./config.toml").unwrap();
-            let conf: WorldGenConf = toml::from_str(file.as_str()).unwrap();
-            WorldGenerator::new(conf)
-        };
-        let mut world_gen = make_world_gen();
+        let mut parameters = worldgen::WorldParams::make_params();    
+
+       
+        let file = std::fs::read_to_string("./config.toml").unwrap();
+        let conf: WorldGenConf = toml::from_str(file.as_str()).unwrap();
+    
+        parameters.define(parameters::Info {
+            tag: worldgen::Param::RiverCutoff,
+            name: "River Cutoff".to_string(),
+            min: Some(0.0),
+            max: Some(1000.0),
+        }, conf.hydrology.min_river_flux.into());
+
+        let mut world_gen = WorldGenerator::new(conf, parameters);
         let poly_map = polymap::PolyMap::new(WIDTH as usize, HEIGHT as usize, 8.0);
         let mut world = world_gen.generate(&poly_map, seed);
         let mut world_view_mode = ViewMode::Heightmap;
@@ -47,12 +60,13 @@ pub fn main() {
                 world = world_gen.generate(&poly_map, seed);
                 polymap_texture.invalidate(painter::Validation::Invalid)
             }
+
             if mq::is_key_pressed(KeyCode::R) {
-                world_gen = make_world_gen();
-                seed = rand::thread_rng().gen();
                 world = world_gen.generate(&poly_map, seed);
                 polymap_texture.invalidate(painter::Validation::Invalid)
             }
+
+
             if mq::is_key_down(KeyCode::F) {
                 world.reflow_rivers(&poly_map);
                 polymap_texture.invalidate(painter::Validation::Invalid)
@@ -94,7 +108,7 @@ pub fn main() {
             );
 
             if show_gui {
-                let events = gui(seed, &world_view_mode, image_caching);
+                let events = gui::gui(seed, world_gen.parameters(), &world_view_mode, image_caching);
                 for event in events {
                     match event {
                         GuiEvent::Close => {
@@ -107,6 +121,9 @@ pub fn main() {
                         GuiEvent::SetWorldTextureCaching(b) => {
                             image_caching = b;
                         }
+                        GuiEvent::ChangeParam(id, value) => {
+                            world_gen.parameters_mut().set_param(id, value)
+                        }
                     }
                 }
             }
@@ -116,51 +133,3 @@ pub fn main() {
     });
 }
 
-
-enum GuiEvent {
-    Close,
-    ChangeMode(ViewMode),
-    SetWorldTextureCaching(bool),
-}
-
-fn gui(seed:u64, world_view_mode: &ViewMode, mut image_caching: bool) -> Vec<GuiEvent> {
-    let mut events = vec![];
-    let mut show_gui = true;
-     // Process keys, mouse etc.
-     egui_macroquad::ui(|egui_ctx| {
-        egui::Window::new("Hello!....Colleague")
-            .open(&mut show_gui)
-            .show(egui_ctx, |ui| {
-                ui.label(&format!("Seed: {}", seed));
-                ui.label(&format!("FPS: {}", mq::get_fps()));
-                if ui.checkbox(&mut image_caching, "Image Caching").clicked() {
-                    events.push(GuiEvent::SetWorldTextureCaching(image_caching));
-                }
-                ui.horizontal_top(|ui| {
-                    for (mode, _) in VIEW_MODES {
-                        let selected = world_view_mode == mode;
-                        let text_color = if selected {
-                            egui::Color32::RED
-                        } else {
-                            egui::Color32::WHITE
-                        };
-
-                        if ui
-                            .add(egui::Button::new(mode.name()).text_color(text_color))
-                            .clicked() {
-                                events.push(GuiEvent::ChangeMode(*mode));
-                        }
-                    }
-                })
-            });
-    });
-
-    // Draw things before egui
-    egui_macroquad::draw();
-
-    if !show_gui {
-        events.push(GuiEvent::Close);
-    }
-
-    events
-}

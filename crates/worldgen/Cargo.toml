@@ -7,6 +7,7 @@ edition = "2021"
 
 [dependencies]
 polymap = { path = "../polymap" }
+parameters = { path = "../parameters"}
 
 rand = { version = "*", features = ["small_rng"]}
 noise = "*"

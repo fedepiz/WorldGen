@@ -20,4 +20,5 @@ toml = "*"
 
 polymap = { path = "../polymap" }
 worldgen = { path = "../worldgen"}
+parameters = { path = "../parameters"}
 

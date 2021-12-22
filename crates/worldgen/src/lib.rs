@@ -1,5 +1,6 @@
 use conf::WorldGenConf;
 use hydrology::HydrologyBuilder;
+use parameters::Parameters;
 use rand::rngs::SmallRng;
 use rand::*;
 
@@ -20,6 +21,19 @@ use heightmap::*;
 
 use generators::{Band, Clump, GridGenerator, PerlinField, Slope};
 use thermology::{Thermolgoy, ThermologyBuilder};
+
+pub enum WorldParams {}
+
+
+
+impl parameters::Space for WorldParams {
+    type Tag = Param;
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum Param {
+    RiverCutoff
+}
 
 pub struct WorldMap {
     heightmap: HeightMap,
@@ -56,11 +70,12 @@ impl WorldMap {
 
 pub struct WorldGenerator {
     conf: WorldGenConf,
+    params: parameters::Parameters<WorldParams>,
 }
 
 impl WorldGenerator {
-    pub fn new(conf: WorldGenConf) -> Self {
-        Self { conf }
+    pub fn new(conf: WorldGenConf, params: parameters::Parameters<WorldParams>) -> Self {
+        Self { conf, params }
     }
 
     pub fn generate(&self, poly_map: &PolyMap, seed: u64) -> WorldMap {
@@ -136,7 +151,7 @@ impl WorldGenerator {
                 conf.rain.perlin.intensity,
             );
 
-            hb.build(poly_map, &heightmap, &terrain, conf.min_river_flux)
+            hb.build(poly_map, &heightmap, &terrain, self.params.get(&Param::RiverCutoff))
         };
 
         let thermology = {
@@ -159,6 +174,14 @@ impl WorldGenerator {
             hydrology,
             thermology,
         }
+    }
+
+    pub fn parameters(&self) -> &Parameters<WorldParams> {
+        &self.params
+    }
+
+    pub fn parameters_mut(&mut self) -> &mut Parameters<WorldParams> {
+        &mut self.params
     }
 }
 

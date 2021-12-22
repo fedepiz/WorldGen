@@ -1,10 +1,11 @@
 use std::collections::HashSet;
 
+use parameters::Parameters;
 use polymap::compute::*;
 use polymap::*;
 
 use crate::generators::GridGenerator;
-use crate::{HeightMap, TerrainType};
+use crate::{HeightMap, TerrainType, WorldParams, Param};
 
 pub(crate) struct HydrologyBuilder {
     corner_rainfall: VertexData<f64>,
@@ -18,21 +19,25 @@ impl HydrologyBuilder {
     }
 
     pub fn scale_by_height(&mut self, poly_map: &PolyMap, hm: &HeightMap, coeff: f64) {
-        self.corner_rainfall.update_each(poly_map, |id, _, h| {
+        self.corner_rainfall.update_each(poly_map, |id, _, rain| {
             let height = hm.vertex_height(id);
-            *h += height * coeff
+
+            let v = (coeff * height) + (1.0 -  coeff) * *rain;
+
+            *rain = v.clamp(0.0, 1.0);
         })
     }
 
     pub fn build(
         self,
+        params: &Parameters<WorldParams>,
         poly_map: &PolyMap,
         height_map: &HeightMap,
         terrain: &CellData<TerrainType>,
         min_river_flux: f64,
     ) -> Hydrology {
         let mut hydrology = Hydrology::new(min_river_flux, self.corner_rainfall);
-        hydrology.recompute(poly_map, height_map, terrain);
+        hydrology.recompute(params, poly_map, height_map, terrain);
         hydrology
     }
 }
@@ -73,6 +78,7 @@ impl Hydrology {
 
     pub(crate) fn recompute(
         &mut self,
+        params: &Parameters<WorldParams>,
         poly_map: &PolyMap,
         height_map: &HeightMap,
         terrain: &CellData<TerrainType>,
@@ -81,8 +87,11 @@ impl Hydrology {
 
         self.vertex_flux = {
             let mut corner_flux = self.vertex_rainfall.clone();
+
+            corner_flux.update_each(poly_map, |_, _, x| *x = *x*params.get(&Param::RainToRiver));
+
             corner_flux.flow(height_map.downhill_flow(), |x, y| {
-                *x += *y;
+                *x = (*x + *y).min(1.0);
             });
             corner_flux
         };

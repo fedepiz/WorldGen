@@ -13,11 +13,9 @@ mod gui;
 const WIDTH: i32 = 1600;
 const HEIGHT: i32 = 900;
 
-const VIEW_MODES: &'static [(ViewMode, KeyCode)] = &[
-    (ViewMode::Heightmap, KeyCode::Key1),
-    (ViewMode::Terrain, KeyCode::Key2),
-    (ViewMode::Hydrology, KeyCode::Key3),
-    (ViewMode::Thermology, KeyCode::Key4),
+const VIEW_MODES: &'static [ViewMode] = &[
+    ViewMode::Heightmap, ViewMode::Terrain, 
+    ViewMode::Hydrology, ViewMode::Thermology,
 ];
 
 pub fn main() {
@@ -31,6 +29,10 @@ pub fn main() {
     macroquad::Window::from_config(config, async {
         let mut seed = 27049319951022;
 
+        
+        let screen_scale_x = WIDTH as f32 / mq::screen_width();
+        let screen_scale_y = HEIGHT as f32 / mq::screen_height();
+
         let mut parameters = worldgen::WorldParams::make_params();    
 
        
@@ -38,10 +40,17 @@ pub fn main() {
         let conf: WorldGenConf = toml::from_str(file.as_str()).unwrap();
     
         parameters.define(parameters::Info {
+            tag: worldgen::Param::RainToRiver,
+            name: "Rain to River".to_string(),
+            min: Some(0.0),
+            max: Some(0.1)
+        }, 0.010);
+
+        parameters.define(parameters::Info {
             tag: worldgen::Param::RiverCutoff,
             name: "River Cutoff".to_string(),
             min: Some(0.0),
-            max: Some(1000.0),
+            max: Some(1.0),
         }, conf.hydrology.min_river_flux.into());
 
         let mut world_gen = WorldGenerator::new(conf, parameters);
@@ -55,45 +64,6 @@ pub fn main() {
         let mut image_caching = true;
 
         loop {
-            if mq::is_key_pressed(KeyCode::G) {
-                seed = rand::thread_rng().gen();
-                world = world_gen.generate(&poly_map, seed);
-                polymap_texture.invalidate(painter::Validation::Invalid)
-            }
-
-            if mq::is_key_pressed(KeyCode::R) {
-                world = world_gen.generate(&poly_map, seed);
-                polymap_texture.invalidate(painter::Validation::Invalid)
-            }
-
-
-            if mq::is_key_down(KeyCode::F) {
-                world.reflow_rivers(&poly_map);
-                polymap_texture.invalidate(painter::Validation::Invalid)
-            }
-
-            if mq::is_key_pressed(KeyCode::Space) {
-                show_gui = !show_gui;
-            }
-
-            if let Some(mode) = VIEW_MODES.iter().find_map(|(mode, key)| {
-                if mq::is_key_pressed(*key) && &world_view_mode != mode {
-                    Some(*mode)
-                } else {
-                    None
-                }
-            }) {
-                world_view_mode = mode;
-                polymap_texture.invalidate(painter::Validation::Invalid)
-            }
-
-            if mq::is_mouse_button_pressed(MouseButton::Left) {
-                let (mx, my) = mq::mouse_position();
-                if let Some(cell_id) = poly_map.polygon_at(mx, my) {
-                    println!("{:?}:{}", cell_id, world.heightmap().cell_height(cell_id));
-                }
-            }
-
             mq::clear_background(mq::WHITE);
 
             if !image_caching {
@@ -107,8 +77,10 @@ pub fn main() {
                 &WorldMapView::new(&world, world_view_mode),
             );
 
+            let mut block_clicks = false;
             if show_gui {
-                let events = gui::gui(seed, world_gen.parameters(), &world_view_mode, image_caching);
+                let (hovered, events) = gui::gui(seed, world_gen.parameters(), &world_view_mode, image_caching);
+                block_clicks = hovered;
                 for event in events {
                     match event {
                         GuiEvent::Close => {
@@ -127,6 +99,39 @@ pub fn main() {
                     }
                 }
             }
+
+            if mq::is_key_pressed(KeyCode::G) {
+                seed = rand::thread_rng().gen();
+                world = world_gen.generate(&poly_map, seed);
+                polymap_texture.invalidate(painter::Validation::Invalid)
+            }
+
+            if mq::is_key_pressed(KeyCode::R) {
+                world = world_gen.generate(&poly_map, seed);
+                polymap_texture.invalidate(painter::Validation::Invalid)
+            }
+
+
+            if mq::is_key_down(KeyCode::F) {
+                world.reflow_rivers(world_gen.parameters(), &poly_map);
+                polymap_texture.invalidate(painter::Validation::Invalid)
+            }
+
+            if mq::is_key_pressed(KeyCode::Space) {
+                show_gui = !show_gui;
+            }            
+                
+            if !block_clicks {
+
+
+                if mq::is_mouse_button_pressed(MouseButton::Left) {
+                    let (mx, my) = mq::mouse_position();
+                    if let Some(cell_id) = poly_map.polygon_at(mx * screen_scale_x, my * screen_scale_y) {
+                        println!("{:?}:{}", cell_id, world.heightmap().cell_height(cell_id));
+                    }
+                }
+            }
+
 
             mq::next_frame().await
         }

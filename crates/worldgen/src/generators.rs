@@ -82,7 +82,7 @@ impl Field for PerlinField {
         let px = self.x_shift + x * self.frequency;
         let py = self.y_shift + y * self.frequency;
         let noise = self.noise.get([px, py]);
-        (noise + 1.0) / 2.0
+        noise
     }
 }
 

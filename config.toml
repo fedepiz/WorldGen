@@ -23,11 +23,11 @@ frequency = 0.01
 intensity = 0.2
 
 [hydrology]
-min_river_flux = 75.0
+min_river_flux = 0.25
 
 [hydrology.rain]
-height_coeff = 1.0
+height_coeff = 0.0
 
 [hydrology.rain.perlin]
 frequency = 0.001
-intensity = 0.5
+intensity = 1

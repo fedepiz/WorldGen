@@ -32,6 +32,7 @@ impl parameters::Space for WorldParams {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Param {
+    RainToRiver,
     RiverCutoff
 }
 
@@ -47,14 +48,18 @@ impl WorldMap {
         &self.heightmap
     }
 
-    pub fn reflow_rivers(&mut self, poly_map: &PolyMap) {
-        self.update_heightmap(poly_map, |hmb| {
+    pub fn reflow_rivers(&mut self, 
+        params: &parameters::Parameters<WorldParams>,
+        poly_map: &PolyMap) {
+        self.update_heightmap(params, poly_map, |hmb| {
             hmb.add_field(poly_map, &PerlinField::new(0.0, 0.0, 0.001), 0.2);
             hmb.planchon_darboux(poly_map);
         })
     }
 
-    fn update_heightmap(&mut self, poly_map: &PolyMap, f: impl FnOnce(&mut HeightMapBuilder)) {
+    fn update_heightmap(&mut self, 
+                         params: &parameters::Parameters<WorldParams>,
+                         poly_map: &PolyMap, f: impl FnOnce(&mut HeightMapBuilder)) {
         let mut hmb = self.heightmap.make_builder();
         f(&mut hmb);
         self.heightmap = hmb.build(poly_map);
@@ -62,7 +67,7 @@ impl WorldMap {
             TerrainType::from_height(self.heightmap.cell_height(id))
         });
         self.hydrology
-            .recompute(poly_map, &self.heightmap, &self.terrain);
+            .recompute(params, poly_map, &self.heightmap, &self.terrain);
         self.thermology
             .recompute(poly_map, &self.heightmap, &self.terrain)
     }
@@ -148,10 +153,10 @@ impl WorldGenerator {
             hb.add_field(
                 poly_map,
                 &PerlinField::with_rng(conf.rain.perlin.frequency, rng),
-                conf.rain.perlin.intensity,
+                conf.rain.perlin.intensity
             );
 
-            hb.build(poly_map, &heightmap, &terrain, self.params.get(&Param::RiverCutoff))
+            hb.build(&self.params, poly_map, &heightmap, &terrain, self.params.get(&Param::RiverCutoff))
         };
 
         let thermology = {

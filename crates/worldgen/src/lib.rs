@@ -4,12 +4,16 @@ use hydrology::HydrologyBuilder;
 use parameters::Parameters;
 use rand::rngs::SmallRng;
 use rand::*;
+use world_map::WorldMap;
+use crate::defs::Defs;
 
 use polymap::{compute::*, *, map_shader::colors::colors};
 
 pub mod conf;
 pub mod view;
+pub mod world_map;
 
+mod defs;
 mod generators;
 mod heightmap;
 mod hydrology;
@@ -22,7 +26,7 @@ pub use hydrology::Hydrology;
 use heightmap::*;
 
 use generators::{Band, Clump, GridGenerator, PerlinField, Slope};
-use thermology::{Thermolgoy, ThermologyBuilder};
+use thermology::{ThermologyBuilder};
 
 pub enum WorldParams {}
 
@@ -38,43 +42,6 @@ pub enum Param {
     RiverCutoff
 }
 
-pub struct WorldMap {
-    defs: Defs,
-    heightmap: HeightMap,
-    terrain: CellData<TerrainType>,
-    hydrology: Hydrology,
-    thermology: Thermolgoy,
-}
-
-impl WorldMap {
-    pub fn heightmap(&self) -> &HeightMap {
-        &self.heightmap
-    }
-
-    pub fn reflow_rivers(&mut self, 
-        params: &parameters::Parameters<WorldParams>,
-        poly_map: &PolyMap) {
-        self.update_heightmap(params, poly_map, |hmb| {
-            hmb.add_field(poly_map, &PerlinField::new(0.0, 0.0, 0.001), 0.2);
-            hmb.planchon_darboux(poly_map);
-        })
-    }
-
-    fn update_heightmap(&mut self, 
-                         params: &parameters::Parameters<WorldParams>,
-                         poly_map: &PolyMap, f: impl FnOnce(&mut HeightMapBuilder)) {
-        let mut hmb = self.heightmap.make_builder();
-        f(&mut hmb);
-        self.heightmap = hmb.build(poly_map);
-        self.terrain = CellData::for_each(poly_map, |id, _| {
-            self.defs.terrain_type.from_level(self.heightmap.cell_height(id), |x| x.height_level)
-        });
-        self.hydrology
-            .recompute(&self.defs, params, poly_map, &self.heightmap, &self.terrain);
-        self.thermology
-            .recompute(&self.defs, poly_map, &self.heightmap, &self.terrain)
-    }
-}
 
 pub struct WorldGenerator {
     conf: WorldGenConf,
@@ -86,8 +53,8 @@ impl WorldGenerator {
         Self { conf, params }
     }
 
-    pub fn generate(&self, poly_map: &PolyMap, seed: u64) -> WorldMap {
-        let defs = Defs::new();
+    pub fn generate<'a>(&self, poly_map: &'a PolyMap, seed: u64) -> WorldMap<'a> {
+        let defs = Defs::new(poly_map);
 
         let mut rng = SmallRng::seed_from_u64(seed);
         let rng = &mut rng;
@@ -161,7 +128,7 @@ impl WorldGenerator {
                 conf.rain.perlin.intensity
             );
 
-            hb.build(&defs, &self.params, poly_map, &heightmap, &terrain, self.params.get(&Param::RiverCutoff))
+            hb.build(&defs, &self.params, &heightmap, &terrain, self.params.get(&Param::RiverCutoff))
         };
 
         let thermology = {
@@ -175,7 +142,7 @@ impl WorldGenerator {
             let h = poly_map.height() as f64;
             let radius = h / 2.0;
             tb.add_field(poly_map, &Band::new(w / 2.0, h / 2.0, 0.0, radius), 0.8);
-            tb.build(&defs, poly_map, &heightmap, &terrain)
+            tb.build(&defs, &heightmap, &terrain)
         };
 
         WorldMap {
@@ -216,19 +183,19 @@ impl TerrainType {
             },
             TerrainTypeData {
                 name: "Land".to_string(),
-                is_water: true,
+                is_water: false,
                 height_level: 0.5,
                 color: colors::GREEN,
             },
             TerrainTypeData {
                 name: "Hill".to_string(),
-                is_water: true,
+                is_water: false,
                 height_level: 0.75,
                 color: colors::BROWN,
             },
             TerrainTypeData {
                 name: "Mountain".to_string(),
-                is_water: true,
+                is_water: false,
                 height_level: 1.0001,
                 color: colors::WHITE
             },
@@ -241,17 +208,4 @@ pub struct TerrainTypeData {
     pub is_water: bool,
     pub height_level: f64,
     pub color: polymap::map_shader::Color,
-}
-
-
-pub struct Defs {
-    terrain_type: FinDef<TerrainType, TerrainTypeData>,
-}
-
-impl Defs {
-    pub fn new() -> Self {
-        Defs {
-            terrain_type: TerrainType::default_definition()
-        }
-    }
 }

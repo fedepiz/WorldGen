@@ -1,4 +1,4 @@
-use crate::{WorldMap};
+use crate::world_map::WorldMap;
 use polymap::map_shader::*;
 use polymap::*;
 
@@ -24,7 +24,7 @@ impl ViewMode {
 }
 
 pub struct WorldMapView<'a> {
-    world_map: &'a WorldMap,
+    world_map: &'a WorldMap<'a>,
     mode: ViewMode,
 }
 

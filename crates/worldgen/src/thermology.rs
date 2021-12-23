@@ -2,7 +2,8 @@ use polymap::compute::*;
 use polymap::*;
 
 use crate::heightmap::HeightMap;
-use crate::{TerrainType, Defs};
+use crate::{TerrainType};
+use crate::defs::Defs;
 
 use crate::generators::GridGenerator;
 
@@ -20,12 +21,11 @@ impl ThermologyBuilder {
     pub fn build(
         self,
         defs: &Defs,
-        poly_map: &PolyMap,
         heightmap: &HeightMap,
         terrain: &CellData<TerrainType>,
     ) -> Thermolgoy {
         let mut thermology = Thermolgoy::new(self.vertex_temperature);
-        thermology.recompute(defs, poly_map, heightmap, terrain);
+        thermology.recompute(defs, heightmap, terrain);
         thermology
     }
 }
@@ -61,16 +61,15 @@ impl Thermolgoy {
     pub(crate) fn recompute(
         &mut self,
         defs: &Defs,
-        poly_map: &PolyMap,
         heightmap: &HeightMap,
         terrain: &CellData<TerrainType>,
     ) {
         self.corner_temperature = self.vertex_innate_temperature.clone();
         // Higher places are cooler, and so are seas
         self.corner_temperature
-            .update_each(poly_map, |id, corner, temperature| {
+            .update_each(defs.poly, |id, corner, temperature| {
                 // Is it a water place, or a land place?
-                let is_water = corner.cells(poly_map).all(|cell| defs.terrain_type[terrain[cell]].is_water);
+                let is_water = corner.cells(defs.poly).all(|cell| defs.terrain_type[terrain[cell]].is_water);
 
                 *temperature = if is_water {
                     (*temperature * 0.5).min(0.4)
@@ -80,7 +79,7 @@ impl Thermolgoy {
                 };
             });
 
-        self.cell_temperature = CellData::vertex_average(poly_map, &self.corner_temperature);
+        self.cell_temperature = CellData::vertex_average(defs.poly, &self.corner_temperature);
     }
 
     pub fn cell_temperature(&self, id: CellId) -> f64 {

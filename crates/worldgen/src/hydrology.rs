@@ -32,13 +32,12 @@ impl HydrologyBuilder {
         self,
         defs: &Defs,
         params: &Parameters<WorldParams>,
-        poly_map: &PolyMap,
         height_map: &HeightMap,
         terrain: &CellData<TerrainType>,
         min_river_flux: f64,
     ) -> Hydrology {
         let mut hydrology = Hydrology::new(min_river_flux, self.corner_rainfall);
-        hydrology.recompute(defs, params, poly_map, height_map, terrain);
+        hydrology.recompute(defs, params, height_map, terrain);
         hydrology
     }
 }
@@ -81,16 +80,15 @@ impl Hydrology {
         &mut self,
         defs: &Defs,
         params: &Parameters<WorldParams>,
-        poly_map: &PolyMap,
         height_map: &HeightMap,
         terrain: &CellData<TerrainType>,
     ) {
-        self.cell_rainfall = CellData::vertex_average(poly_map, &self.vertex_rainfall);
+        self.cell_rainfall = CellData::vertex_average(defs.poly, &self.vertex_rainfall);
 
         self.vertex_flux = {
             let mut corner_flux = self.vertex_rainfall.clone();
 
-            corner_flux.update_each(poly_map, |_, _, x| *x = *x*params.get(&Param::RainToRiver));
+            corner_flux.update_each(defs.poly, |_, _, x| *x = *x*params.get(&Param::RainToRiver));
 
             corner_flux.flow(height_map.downhill_flow(), |x, y| {
                 *x = (*x + *y).min(1.0);
@@ -98,7 +96,7 @@ impl Hydrology {
             corner_flux
         };
 
-        self.edge_flux = EdgeData::for_each(poly_map, |_, edge| {
+        self.edge_flux = EdgeData::for_each(defs.poly, |_, edge| {
             let mut flux = 0.0;
             if height_map.is_descent(edge.start(), edge.end()) {
                 flux += self.vertex_flux[edge.start()]
@@ -111,7 +109,6 @@ impl Hydrology {
 
         self.rivers = Rivers::compute(
             defs,
-            poly_map,
             height_map,
             terrain,
             &self.edge_flux,
@@ -151,22 +148,21 @@ impl Rivers {
 
     fn compute(
         defs: &Defs,
-        poly_map: &PolyMap,
         height_map: &HeightMap,
         terrain: &CellData<TerrainType>,
         edge_flux: &EdgeData<f64>,
         min_river_flux: f64,
     ) -> Self {
-        let edge_is_river = EdgeData::from_cell_data(poly_map, &terrain, |id, _, terrain| {
+        let edge_is_river = EdgeData::from_cell_data(defs.poly, &terrain, |id, _, terrain| {
             let is_water = terrain.iter().any(|&&tt| defs.terrain_type[tt].is_water);
             !is_water && edge_flux[id] > min_river_flux
         });
 
         let mut river_sources = HashSet::new();
-        for (id, edge) in poly_map.edges() {
+        for (id, edge) in defs.poly.edges() {
             if edge_is_river[id] {
                 if let Some(top) = height_map.edge_high_corner(edge) {
-                    let is_source = poly_map
+                    let is_source = defs.poly
                         .vertex(top)
                         .edges()
                         .iter()
@@ -184,7 +180,7 @@ impl Rivers {
                 let path: Vec<_> = height_map
                     .downhill_path(source)
                     .take_while(|&corner| {
-                        poly_map
+                        defs.poly
                             .vertex(corner)
                             .edges()
                             .iter()

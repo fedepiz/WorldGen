@@ -115,7 +115,7 @@ pub fn main() {
 
 
             if mq::is_key_down(KeyCode::F) {
-                world.reflow_rivers(world_gen.parameters(), &poly_map);
+                world.reflow_rivers(world_gen.parameters());
                 polymap_texture.invalidate(painter::Validation::Invalid)
             }
 

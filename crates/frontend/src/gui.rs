@@ -48,13 +48,12 @@ pub(crate) fn gui(seed:u64,
                             .clicked() {
                                 events.push(GuiEvent::ChangeMode(*mode));
                         }
-                    }
+                    } 
                 });
-
+                
                 edit_parameter(ui, &mut events, parameters, &worldgen::Param::RainToRiver);
                 edit_parameter(ui, &mut events, parameters, &worldgen::Param::RiverCutoff);
             });
-
     });
 
     // Draw things before egui

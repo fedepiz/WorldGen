@@ -5,7 +5,7 @@ use polymap::compute::*;
 use polymap::*;
 
 use crate::generators::GridGenerator;
-use crate::{HeightMap, TerrainType, WorldParams, Param};
+use crate::{HeightMap, TerrainType, WorldParams, Param, Defs};
 
 pub(crate) struct HydrologyBuilder {
     corner_rainfall: VertexData<f64>,
@@ -30,6 +30,7 @@ impl HydrologyBuilder {
 
     pub fn build(
         self,
+        defs: &Defs,
         params: &Parameters<WorldParams>,
         poly_map: &PolyMap,
         height_map: &HeightMap,
@@ -37,7 +38,7 @@ impl HydrologyBuilder {
         min_river_flux: f64,
     ) -> Hydrology {
         let mut hydrology = Hydrology::new(min_river_flux, self.corner_rainfall);
-        hydrology.recompute(params, poly_map, height_map, terrain);
+        hydrology.recompute(defs, params, poly_map, height_map, terrain);
         hydrology
     }
 }
@@ -78,6 +79,7 @@ impl Hydrology {
 
     pub(crate) fn recompute(
         &mut self,
+        defs: &Defs,
         params: &Parameters<WorldParams>,
         poly_map: &PolyMap,
         height_map: &HeightMap,
@@ -108,6 +110,7 @@ impl Hydrology {
         });
 
         self.rivers = Rivers::compute(
+            defs,
             poly_map,
             height_map,
             terrain,
@@ -147,6 +150,7 @@ impl Rivers {
     }
 
     fn compute(
+        defs: &Defs,
         poly_map: &PolyMap,
         height_map: &HeightMap,
         terrain: &CellData<TerrainType>,
@@ -154,7 +158,7 @@ impl Rivers {
         min_river_flux: f64,
     ) -> Self {
         let edge_is_river = EdgeData::from_cell_data(poly_map, &terrain, |id, _, terrain| {
-            let is_water = terrain.iter().any(|tt| tt.is_water());
+            let is_water = terrain.iter().any(|&&tt| defs.terrain_type[tt].is_water);
             !is_water && edge_flux[id] > min_river_flux
         });
 

@@ -1,10 +1,11 @@
 use conf::WorldGenConf;
+use finvec::FinDef;
 use hydrology::HydrologyBuilder;
 use parameters::Parameters;
 use rand::rngs::SmallRng;
 use rand::*;
 
-use polymap::{compute::*, *};
+use polymap::{compute::*, *, map_shader::colors::colors};
 
 pub mod conf;
 pub mod view;
@@ -13,6 +14,7 @@ mod generators;
 mod heightmap;
 mod hydrology;
 mod thermology;
+mod biome;
 
 pub use heightmap::HeightMap;
 pub use hydrology::Hydrology;
@@ -37,6 +39,7 @@ pub enum Param {
 }
 
 pub struct WorldMap {
+    defs: Defs,
     heightmap: HeightMap,
     terrain: CellData<TerrainType>,
     hydrology: Hydrology,
@@ -64,12 +67,12 @@ impl WorldMap {
         f(&mut hmb);
         self.heightmap = hmb.build(poly_map);
         self.terrain = CellData::for_each(poly_map, |id, _| {
-            TerrainType::from_height(self.heightmap.cell_height(id))
+            self.defs.terrain_type.from_level(self.heightmap.cell_height(id), |x| x.height_level)
         });
         self.hydrology
-            .recompute(params, poly_map, &self.heightmap, &self.terrain);
+            .recompute(&self.defs, params, poly_map, &self.heightmap, &self.terrain);
         self.thermology
-            .recompute(poly_map, &self.heightmap, &self.terrain)
+            .recompute(&self.defs, poly_map, &self.heightmap, &self.terrain)
     }
 }
 
@@ -84,6 +87,8 @@ impl WorldGenerator {
     }
 
     pub fn generate(&self, poly_map: &PolyMap, seed: u64) -> WorldMap {
+        let defs = Defs::new();
+
         let mut rng = SmallRng::seed_from_u64(seed);
         let rng = &mut rng;
 
@@ -142,7 +147,7 @@ impl WorldGenerator {
         };
 
         let terrain = CellData::for_each(poly_map, |id, _| {
-            TerrainType::from_height(heightmap.cell_height(id))
+            defs.terrain_type.from_level(heightmap.cell_height(id), |x| x.height_level)
         });
 
         let hydrology = {
@@ -156,7 +161,7 @@ impl WorldGenerator {
                 conf.rain.perlin.intensity
             );
 
-            hb.build(&self.params, poly_map, &heightmap, &terrain, self.params.get(&Param::RiverCutoff))
+            hb.build(&defs, &self.params, poly_map, &heightmap, &terrain, self.params.get(&Param::RiverCutoff))
         };
 
         let thermology = {
@@ -170,10 +175,11 @@ impl WorldGenerator {
             let h = poly_map.height() as f64;
             let radius = h / 2.0;
             tb.add_field(poly_map, &Band::new(w / 2.0, h / 2.0, 0.0, radius), 0.8);
-            tb.build(poly_map, &heightmap, &terrain)
+            tb.build(&defs, poly_map, &heightmap, &terrain)
         };
 
         WorldMap {
+            defs,
             heightmap,
             terrain,
             hydrology,
@@ -190,65 +196,62 @@ impl WorldGenerator {
     }
 }
 
-#[derive(Clone, Copy)]
-enum TerrainType {
-    DeepWater,
-    Water,
-    Land,
-    Hill,
-    Mountain,
-}
+finvec::fin_idx!(pub TerrainType);
+
 
 impl TerrainType {
-    const LEVELS: &'static [(TerrainType, f64)] = &[
-        (TerrainType::DeepWater, 0.0),
-        (TerrainType::Water, 0.5),
-        (TerrainType::Land, 0.5),
-        (TerrainType::Hill, 0.75),
-        (TerrainType::Mountain, 1.00001),
-    ];
-
-    fn idx_from_height(height: f64) -> usize {
-        Self::LEVELS
-            .iter()
-            .enumerate()
-            .find_map(|(idx, &(_, x))| if height < x { Some(idx) } else { None })
-            .unwrap()
+    pub fn default_definition() -> FinDef<TerrainType, TerrainTypeData> {
+        FinDef::new(vec![
+            TerrainTypeData {
+                name: "Deep Water".to_string(),
+                is_water: true,
+                height_level: 0.0,
+                color: colors::DARKBLUE,
+            },
+            TerrainTypeData {
+                name: "Water".to_string(),
+                is_water: true,
+                height_level: 0.5,
+                color: colors::BLUE,
+            },
+            TerrainTypeData {
+                name: "Land".to_string(),
+                is_water: true,
+                height_level: 0.5,
+                color: colors::GREEN,
+            },
+            TerrainTypeData {
+                name: "Hill".to_string(),
+                is_water: true,
+                height_level: 0.75,
+                color: colors::BROWN,
+            },
+            TerrainTypeData {
+                name: "Mountain".to_string(),
+                is_water: true,
+                height_level: 1.0001,
+                color: colors::WHITE
+            },
+        ])
     }
+}
 
-    fn from_height(height: f64) -> TerrainType {
-        Self::LEVELS[Self::idx_from_height(height)].0
-    }
+pub struct TerrainTypeData {
+    pub name: String,
+    pub is_water: bool,
+    pub height_level: f64,
+    pub color: polymap::map_shader::Color,
+}
 
-    fn from_height_range(height: f64) -> (TerrainType, TerrainType, f64) {
-        let high_idx = Self::idx_from_height(height);
 
-        let low = Self::LEVELS
-            .get(high_idx - 1)
-            .copied()
-            .unwrap_or(Self::LEVELS[0]);
-        let high = Self::LEVELS[high_idx];
+pub struct Defs {
+    terrain_type: FinDef<TerrainType, TerrainTypeData>,
+}
 
-        // Don't mix land and sea
-        let t = if low.0.is_water() != high.0.is_water() {
-            1.0
-        } else {
-            let n = high.1 - low.1;
-            // Same height -> only one terrain
-            if n == 0.0 {
-                1.0
-            } else {
-                (height - low.1) / (high.1 - low.1)
-            }
-        };
-        (low.0, high.0, t)
-    }
-
-    fn is_water(&self) -> bool {
-        match self {
-            TerrainType::Water => true,
-            TerrainType::DeepWater => true,
-            _ => false,
+impl Defs {
+    pub fn new() -> Self {
+        Defs {
+            terrain_type: TerrainType::default_definition()
         }
     }
 }

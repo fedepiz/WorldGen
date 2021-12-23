@@ -124,8 +124,6 @@ pub fn main() {
             }            
                 
             if !block_clicks {
-
-
                 if mq::is_mouse_button_pressed(MouseButton::Left) {
                     let (mx, my) = mq::mouse_position();
                     if let Some(cell_id) = poly_map.polygon_at(mx * screen_scale_x, my * screen_scale_y) {

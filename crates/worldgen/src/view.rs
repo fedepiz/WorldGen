@@ -1,4 +1,4 @@
-use crate::{WorldMap, TerrainType};
+use crate::{WorldMap};
 use polymap::map_shader::*;
 use polymap::*;
 
@@ -43,16 +43,16 @@ impl<'a> MapShader for WorldMapView<'a> {
                 Color::new(intensity, intensity, intensity, 1.0)
             }
             ViewMode::Terrain => {
-                let terrain_color = |terrain| match terrain {
-                    TerrainType::DeepWater => colors::DARKBLUE,
-                    TerrainType::Water => colors::BLUE,
-                    TerrainType::Land => colors::GREEN,
-                    TerrainType::Hill => colors::BROWN,
-                    TerrainType::Mountain => colors::WHITE,
+
+                let terrain_color = |terrain| {
+                    self.world_map.defs.terrain_type[terrain].color
                 };
 
-                let (tlower, theigher, t) =
-                    TerrainType::from_height_range(self.world_map.heightmap.cell_height(id));
+                let height = self.world_map.heightmap.cell_height(id);
+
+                let (tlower, theigher, t) = self.world_map.defs.terrain_type
+                    .from_level_range(height, |x| x.height_level);
+        
                 let clower = terrain_color(tlower);
                 let chigher = terrain_color(theigher);
                 interpolate_colors(clower, chigher, t as f32)

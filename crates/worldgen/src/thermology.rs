@@ -2,7 +2,7 @@ use polymap::compute::*;
 use polymap::*;
 
 use crate::heightmap::HeightMap;
-use crate::TerrainType;
+use crate::{TerrainType, Defs};
 
 use crate::generators::GridGenerator;
 
@@ -19,12 +19,13 @@ impl ThermologyBuilder {
 
     pub fn build(
         self,
+        defs: &Defs,
         poly_map: &PolyMap,
         heightmap: &HeightMap,
         terrain: &CellData<TerrainType>,
     ) -> Thermolgoy {
         let mut thermology = Thermolgoy::new(self.vertex_temperature);
-        thermology.recompute(poly_map, heightmap, terrain);
+        thermology.recompute(defs, poly_map, heightmap, terrain);
         thermology
     }
 }
@@ -59,6 +60,7 @@ impl Thermolgoy {
 
     pub(crate) fn recompute(
         &mut self,
+        defs: &Defs,
         poly_map: &PolyMap,
         heightmap: &HeightMap,
         terrain: &CellData<TerrainType>,
@@ -68,7 +70,7 @@ impl Thermolgoy {
         self.corner_temperature
             .update_each(poly_map, |id, corner, temperature| {
                 // Is it a water place, or a land place?
-                let is_water = corner.cells(poly_map).all(|cell| terrain[cell].is_water());
+                let is_water = corner.cells(poly_map).all(|cell| defs.terrain_type[terrain[cell]].is_water);
 
                 *temperature = if is_water {
                     (*temperature * 0.5).min(0.4)

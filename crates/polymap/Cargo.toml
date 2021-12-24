@@ -13,5 +13,4 @@ rand = { version = "0.8.*", features = ["small_rng"]}
 fast_poisson = "*"
 voronator = "*"
 geo = "0.18"
-arrayvec = "0.7"
 rayon = "1.5"

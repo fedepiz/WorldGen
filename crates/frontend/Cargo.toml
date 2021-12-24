@@ -18,7 +18,8 @@ serde = "1.0"
 serde_derive = "*"
 toml = "*"
 
-polymap = { path = "../polymap" }
-worldgen = { path = "../worldgen"}
-parameters = { path = "../parameters"}
+strum = "*"
+strum_macros = "*"
 
+polymap = { path = "../polymap" }
+world = { path = "../world" }

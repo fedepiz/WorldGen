@@ -1,22 +1,18 @@
-use parameters::Space;
-use ::rand::Rng;
 use macroquad::prelude as mq;
 use macroquad::prelude::{KeyCode, MouseButton};
-use worldgen::{conf::WorldGenConf, view::*, WorldGenerator};
 
 use gui::GuiEvent;
+use painter::ViewMode;
+use polymap::PolyMap;
+use rand::SeedableRng;
 
-mod painter;
 mod gui;
+mod tessellation;
+mod painter;
 
 
 const WIDTH: i32 = 1600;
 const HEIGHT: i32 = 900;
-
-const VIEW_MODES: &'static [ViewMode] = &[
-    ViewMode::Heightmap, ViewMode::Terrain, 
-    ViewMode::Hydrology, ViewMode::Thermology,
-];
 
 pub fn main() {
     let mut config = mq::Conf::default();
@@ -27,111 +23,83 @@ pub fn main() {
 
 
     macroquad::Window::from_config(config, async {
-        let mut seed = 27049319951022;
+        let seed = 27049319951022;
 
         
         let screen_scale_x = WIDTH as f32 / mq::screen_width();
         let screen_scale_y = HEIGHT as f32 / mq::screen_height();
 
-        let mut parameters = worldgen::WorldParams::make_params();    
+        let poly = PolyMap::new(1600, 900, 8.0);
+        let world = {
+            let mut w = world::World::new(&poly);
+            w.generate(&mut rand::rngs::SmallRng::seed_from_u64(seed));
+            w
+        };
+        let mut view_mode = ViewMode::Geography;
+        let mut dirty = true;
 
-       
-        let file = std::fs::read_to_string("./config.toml").unwrap();
-        let conf: WorldGenConf = toml::from_str(file.as_str()).unwrap();
-    
-        parameters.define(parameters::Info {
-            tag: worldgen::Param::RainToRiver,
-            name: "Rain to River".to_string(),
-            min: Some(0.0),
-            max: Some(0.1),
-            logarithmic: true,
-        }, 0.010);
-
-        parameters.define(parameters::Info {
-            tag: worldgen::Param::RiverCutoff,
-            name: "River Cutoff".to_string(),
-            min: Some(0.0),
-            max: Some(1.0),
-            logarithmic: false,
-        }, conf.hydrology.min_river_flux.into());
-
-        let mut world_gen = WorldGenerator::new(conf, parameters);
-        let poly_map = polymap::PolyMap::new(WIDTH as usize, HEIGHT as usize, 8.0);
-        let mut world = world_gen.generate(&poly_map, seed);
-        let mut world_view_mode = ViewMode::Heightmap;
-
-        let mut polymap_texture = painter::Painter::new(&poly_map).unwrap();
+        let mut painter = painter::Painter::new(&poly);
 
         let mut show_gui = false;
-        let mut image_caching = true;
+
+        let mut river_mode = false;
 
         loop {
-            mq::clear_background(mq::WHITE);
 
-            if !image_caching {
-                polymap_texture.invalidate(painter::Validation::Invalid);
+            if dirty {
+                painter.update(&world, view_mode);
+                dirty = false;
             }
 
-            polymap_texture.draw(
-                0.0,
-                0.0,
-                &poly_map,
-                &WorldMapView::new(&world, world_view_mode),
-            );
+            mq::clear_background(mq::WHITE);
+
+            painter.draw();
+
 
             let mut block_clicks = false;
             if show_gui {
-                let (hovered, events) = gui::gui(seed, world_gen.parameters(), &world_view_mode, image_caching);
+                let (hovered, events) = gui::gui(seed, view_mode);
                 block_clicks = hovered;
                 for event in events {
                     match event {
                         GuiEvent::Close => {
                             show_gui = false;
                         }
-                        GuiEvent::ChangeMode(mode) => {
-                            world_view_mode = mode;
-                            polymap_texture.invalidate(painter::Validation::Invalid)
-                        }
-                        GuiEvent::SetWorldTextureCaching(b) => {
-                            image_caching = b;
-                        }
-                        GuiEvent::ChangeParam(id, value) => {
-                            world_gen.parameters_mut().set_param(id, value)
+                        GuiEvent::SetViewMode(mode) => {
+                            view_mode = mode;
+                            dirty = true;
                         }
                     }
                 }
             }
 
-            if mq::is_key_pressed(KeyCode::G) {
-                seed = rand::thread_rng().gen();
-                world = world_gen.generate(&poly_map, seed);
-                polymap_texture.invalidate(painter::Validation::Invalid)
-            }
+            if !block_clicks {
+                let (smx, smy) = mq::mouse_position();
+                // Scale th mouse coordinate appropriately
+                let mx = screen_scale_x * smx;
+                let my = screen_scale_y * smy;
 
-            if mq::is_key_pressed(KeyCode::R) {
-                world = world_gen.generate(&poly_map, seed);
-                polymap_texture.invalidate(painter::Validation::Invalid)
-            }
-
-
-            if mq::is_key_down(KeyCode::F) {
-                world.reflow_rivers(world_gen.parameters());
-                polymap_texture.invalidate(painter::Validation::Invalid)
+                if mq::is_mouse_button_pressed(MouseButton::Left) {
+                    if let Some(clicked_poly) = poly.cell_at(mx as f64, my as f64) {
+                        println!("Clicked cell:{}", clicked_poly.idx())
+                    }
+                }
             }
 
             if mq::is_key_pressed(KeyCode::Space) {
                 show_gui = !show_gui;
-            }            
+            }    
+            
+            if mq::is_key_pressed(KeyCode::R) {
+                river_mode = !river_mode;
+                dirty = true;
+            }        
                 
             if !block_clicks {
                 if mq::is_mouse_button_pressed(MouseButton::Left) {
-                    let (mx, my) = mq::mouse_position();
-                    if let Some(cell_id) = poly_map.polygon_at(mx * screen_scale_x, my * screen_scale_y) {
-                        println!("{:?}:{}", cell_id, world.heightmap().cell_height(cell_id));
-                    }
+                    
                 }
             }
-
 
             mq::next_frame().await
         }

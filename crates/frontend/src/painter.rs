@@ -1,173 +1,145 @@
-use macroquad::prelude::{self as mq, Vec2};
-
-use polymap::map_shader::MapShader;
+use macroquad::prelude as mq;
 use polymap::*;
+use world::*;
 
+use crate::tessellation::{GridTessellation, PathTessellation};
+
+use strum_macros::EnumIter;
+
+#[derive(Clone, Copy, PartialEq, Eq, EnumIter)]
+pub enum ViewMode {
+    Heightmap,
+    Geography,
+    Temperature,
+    Hydrology,
+}
+
+
+impl ViewMode {
+
+    pub fn name(&self) -> &'static str {
+        match self {
+            ViewMode::Heightmap => "Heightmap",
+            ViewMode::Geography => "Geography",
+            ViewMode::Temperature => "Temperature",
+            ViewMode::Hydrology => "Hydrology"
+        }
+    }
+
+    fn color(&self, world:&World, cell: CellId) -> mq::Color {
+        match self {
+            &ViewMode::Heightmap => {
+                let height = world.heightmap()[cell] as f32;
+                mq::Color::new(height,height, height, 1.0)
+            }
+            &ViewMode::Geography => {
+                let terrain_category = world.terrain_category()[cell];
+                match terrain_category {
+                    TerrainCategory::Land => {
+                        let t = (world.heightmap()[cell] - 0.5) * 2.0;
+                        colors::interpolate_three_colors(mq::GREEN, mq::BROWN, mq::WHITE, t as f32)
+                    }
+                    TerrainCategory::Coast => mq::SKYBLUE,
+                    TerrainCategory::Sea => mq::BLUE,
+                }
+            }
+            &ViewMode::Temperature => {
+                let temperature = world.temperature()[cell] as f32;
+                colors::interpolate_three_colors(mq::BLUE, mq::YELLOW, mq::RED, temperature)
+            }
+            &ViewMode::Hydrology => {
+                let drainage = world.drainage()[cell] as f32;
+                mq::Color::new(0.0, 0.0, 1.0, drainage)
+            }
+        }
+    }
+
+    fn paths(&self, world:&World) -> Vec<(Vec<CellId>, mq::Color)> {
+        match self {
+            ViewMode::Geography => {
+                world.rivers().iter().map(|path| 
+                    (path.cells().iter().copied().collect(), mq::BLUE)
+                ).collect()
+            },
+            &ViewMode::Hydrology => {
+                world.rivers().iter().map(|path| 
+                    (path.cells().iter().copied().collect(), mq::BLACK)
+                ).collect()
+            }
+            _ => vec![]
+        }
+    }
+}
 pub struct Painter {
-    render_target: mq::RenderTarget,
-    validation: Validation,
-    tessellation: Tessellation,
+    target: mq::RenderTarget,
+    tessellation: GridTessellation,
 }
 
 impl Painter {
-    pub fn new(polymap: &PolyMap) -> Result<Self, String> {
-        let texture = mq::render_target(polymap.width() as u32, polymap.height() as u32);
-
-        let tessellation = Tessellation::new(polymap);
-
-        Ok(Self {
-            render_target: texture,
-            tessellation,
-            validation: Validation::Invalid,
-        })
-    }
-
-    pub fn draw(&mut self, x: f32, y: f32, poly_map: &PolyMap, shader: &impl MapShader) {
-        if !self.validation.is_valid() {
-            self.draw_all(poly_map, shader);
-            self.validation = Validation::Valid;
+    pub fn new(poly: &PolyMap) -> Self {
+        Self {
+            target: mq::render_target(poly.width() as u32, poly.height() as u32),
+            tessellation: GridTessellation::new(poly),
         }
-
-        let mut params = mq::DrawTextureParams::default();
-        params.dest_size = Some(Vec2::new(mq::screen_width(), mq::screen_height()));
-        mq::draw_texture_ex(self.render_target.texture, x, y, mq::WHITE, params);
     }
 
-    pub fn invalidate(&mut self, validation: Validation) {
-        self.validation.join(validation)
-    }
-
-    pub fn draw_all(&mut self, poly_map: &PolyMap, shader: &impl MapShader) {
-        let mut camera = mq::Camera2D::from_display_rect(mq::Rect::new(0.0, 0.0, 1600.0, 900.0));
-        camera.render_target = Some(self.render_target);
+    pub fn update(&mut self, world: &World, mode: ViewMode) {
+        let display_rect = mq::Rect::new(0.0, 0.0, world.poly().width() as f32, world.poly().height() as f32);
+        let mut camera = mq::Camera2D::from_display_rect(display_rect);
+        camera.render_target = Some(self.target);
+        mq::push_camera_state();
         mq::set_camera(&camera);
 
-        mq::draw_rectangle(
-            0.0,
-            0.0,
-            poly_map.width() as f32,
-            poly_map.height() as f32,
-            mq::WHITE,
-        );
-
-        {
-            self.tessellation.draw(&poly_map, shader);
-            Self::draw_edges(poly_map, shader);
-
-            if shader.draw_vertices() {
-                Self::draw_vertices(poly_map, shader);
-            }
-        };
-
-        mq::set_default_camera()
-    }
-
-    fn draw_edges(poly_map: &PolyMap, shader: &impl MapShader) {
-        for (id, edge) in poly_map.edges() {
-            if let Some(color) = shader.edge(id, edge) {
-                let ((ax, ay), (bx, by)) = poly_map.edge_endpoints_coords(edge);
-                let start = Vec2::new(ax as f32, poly_map.height() as f32 - ay as f32);
-                let end = Vec2::new(bx as f32, poly_map.height() as f32 - by as f32);
-
-                mq::draw_line(start.x, start.y, end.x, end.y, 1.0, color);
-            }
-        }
-    }
-
-    fn draw_vertices(poly_map: &PolyMap, shader: &impl MapShader) {
-        for (id, corner) in poly_map.vertices() {
-            if let Some(color) = shader.vertex(id, corner) {
-                let tile_halfsize = 2.0;
-
-                let half_size = Vec2::ZERO + Vec2::new(tile_halfsize, tile_halfsize);
-                let position = Vec2::new(
-                    corner.x() as f32,
-                    poly_map.height() as f32 - corner.y() as f32,
-                ) - half_size;
-                let size = half_size * 2.0;
-
-                mq::draw_rectangle(position.x, position.y, size.x, size.y, color);
-            }
-        }
-    }
-}
-
-pub enum Validation {
-    Valid,
-    Invalid,
-}
-
-impl Validation {
-    fn is_valid(&self) -> bool {
-        match self {
-            Self::Valid => true,
-            _ => false,
-        }
-    }
-
-    fn join(&mut self, other: Validation) {
-        match self {
-            Self::Valid => *self = other,
-            Self::Invalid => {}
-        }
-    }
-}
-
-struct Tessellation {
-    cells: Vec<Vec<[Vec2; 3]>>,
-}
-
-impl Tessellation {
-    pub fn new(poly_map: &PolyMap) -> Self {
-        use lyon::math::Point;
-        use lyon::path::builder::*;
-        use lyon::tessellation::geometry_builder::simple_builder;
-        use lyon::tessellation::{FillOptions, FillTessellator, VertexBuffers};
-
-        let mut cells = vec![];
-        let mut geometry = VertexBuffers::<Point, u16>::new();
-        {
-            let options = FillOptions::tolerance(0.1);
-            let mut tessellator = FillTessellator::new();
-            for (_, cell) in poly_map.cells() {
-                let points: Vec<_> = cell
-                    .polygon()
-                    .exterior()
-                    .points_iter()
-                    .map(|p| lyon::geom::point(p.x() as f32, poly_map.height() as f32 - p.y() as f32))
-                    .collect();
-                let polygon = lyon::path::Polygon {
-                    points: points.as_slice(),
-                    closed: true,
-                };
-
-                geometry.vertices.clear();
-                geometry.indices.clear();
-                let mut geometry_builder = simple_builder(&mut geometry);
-                let mut builder = tessellator.builder(&options, &mut geometry_builder);
-                builder.add_polygon(polygon);
-                builder.build().unwrap();
-
-                let mut triangles = vec![];
-                for triangle in geometry.indices.chunks(3) {
-                    let make_vertex = |idx| {
-                        let v: &lyon::math::Point = &geometry.vertices[triangle[idx] as usize];
-                        Vec2::new(v.x, v.y)
-                    };
-                    triangles.push([make_vertex(0), make_vertex(1), make_vertex(2)]);
-                }
-                cells.push(triangles);
-            }
-        }
-        Self { cells }
-    }
-
-    pub fn draw<'a>(&self, poly_map: &PolyMap, shader: &impl MapShader) {
-        for ((id, _), triangles) in poly_map.cells().zip(self.cells.iter()) {
+        mq::draw_rectangle(0.0,0.0, world.poly().width() as f32, world.poly().height() as f32, mq::BLACK);
+        
+        for (cell, _) in world.poly().cells() {
+            let triangles = self.tessellation.polygon_of(cell);
+            let color = mode.color(world, cell);
             for triangle in triangles {
-                let color = shader.cell(id);
                 mq::draw_triangle(triangle[0], triangle[1], triangle[2], color);
             }
         }
+      
+        for (path, color) in mode.paths(world) {
+            let tess = PathTessellation::path_of_cells(world.poly(), path.as_slice(), 2.0).unwrap();
+            for triangle in tess.polygon() {
+                mq::draw_triangle(triangle[0], triangle[1], triangle[2], color)
+            }
+        }
+    
+        mq::pop_camera_state();
+    }
+
+    pub fn draw(&mut self) {
+        let mut params = mq::DrawTextureParams::default();
+        params.dest_size = Some(mq::Vec2::new(mq::screen_width(), mq::screen_height()));
+        mq::draw_texture_ex(self.target.texture, 0.0, 0.0, mq::WHITE, params);
+    }
+}
+
+
+ 
+mod colors {
+    use macroquad::prelude::*;
+
+    pub fn interpolate_three_colors(c1: Color, c2: Color, c3: Color, t: f32) -> Color {
+        if t <= 0.5 {
+            interpolate_colors(c1, c2, 2. * t)
+        } else {
+            interpolate_colors(c2, c3, 2. * (t - 0.5))
+        }
+    }
+
+    pub fn interpolate_colors(c1: Color, c2: Color, t: f32) -> Color {
+        Color::new(
+            lerp8(c1.r, c2.r, t),
+            lerp8(c1.g, c2.g, t),
+            lerp8(c1.b, c2.b, t),
+            lerp8(c1.a, c2.a, t),
+        )
+    }
+
+    pub fn lerp8(a: f32, b: f32, t: f32) -> f32 {
+        ((1.0 - t) * a) + (t * b)
     }
 }

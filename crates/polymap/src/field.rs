@@ -43,7 +43,22 @@ impl <T:Copy> Field<T> {
     }
 }
 
-impl Field<f64> {
+pub trait Smoothable : Clone {
+    fn add(&mut self, x:&Self);
+    fn divide(&mut self, n: usize);
+}
+
+impl Smoothable for f64 {
+    fn add(&mut self, x:&Self) {
+        *self += *x;
+    }
+
+    fn divide(&mut self, n: usize) {
+        *self = *self/(n as f64)
+    }
+}
+
+impl <T:Smoothable> Field<T> {
 
     pub fn smooth(&mut self, poly:&PolyMap, iterations: usize) {
         for _ in 0 .. iterations {
@@ -54,15 +69,20 @@ impl Field<f64> {
     fn smooth_once(&mut self, poly:&PolyMap,) {
         let data = Field::with_fn(poly, |id, cell| {
             let mut count = 1;
-            let mut val = self[id];
+            let mut val = self[id].clone();
             for &neighbor in cell.neighbors() {
-                val += self[neighbor];
+                val.add(&self[neighbor]);
                 count += 1;
             }
-            val/(count as f64)
+            val.divide(count);
+            val
         });
         self.0 = data.0;
     }
+}
+
+impl Field<f64> {
+
     
     pub fn normalize(&mut self) {
         let mut min = f64::MAX;

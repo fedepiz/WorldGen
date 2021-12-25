@@ -1,7 +1,8 @@
 pub mod measure;
 mod biome;
 
-pub use biome::Biome;
+pub use biome::Ground;
+use biome::Vegetation;
 
 use std::{collections::HashSet};
 
@@ -27,7 +28,8 @@ pub struct World<'a> {
     rivers: Vec<Path>,
     is_river: Field<bool>,
 
-    biome: Field<Biome>
+    ground: Field<Ground>,
+    vegetation: Field<Vegetation>,
 }
 
 impl <'a> World<'a> {
@@ -44,7 +46,9 @@ impl <'a> World<'a> {
             drainage: Field::uniform(poly, 0.0),
             rivers: vec![],
             is_river: Field::uniform(poly, false),
-            biome: Field::uniform(poly, Biome::Underwater),
+
+            ground: Field::uniform(poly, Ground::default()),
+            vegetation: Field::uniform(poly, Vegetation::default()),
         }
     }
 
@@ -70,21 +74,29 @@ impl <'a> World<'a> {
         });
 
         self.rainfall.update(|_, x| *x = 0.00);
-
         self.blow_wind(rng);
-
+        self.rainfall.smooth(&self.poly, 3);
 
         self.generate_rivers();
 
-        self.biome.update(|id, biome| {
-            *biome = if self.terrain_category[id] == TerrainCategory::Sea {
-                Biome::Underwater
-            } else {
-                let temperature = self.temperature[id];
-                let rain = self.rainfall[id];
-                Biome::whittaker(temperature, rain)
-            };
-        })
+        self.ground.update(|id, ground| {
+            *ground = Ground::new(
+                self.terrain_category[id], 
+                self.rainfall[id], 
+                self.drainage[id], 
+                self.heightmap[id]
+            )
+        });
+        self.ground.smooth(&self.poly, 2);
+
+        self.vegetation.update(|id, vegetation| {
+            *vegetation = Vegetation::new(
+                self.terrain_category[id], 
+                self.rainfall[id], 
+                self.temperature[id], 
+                self.heightmap[id]
+            )
+        });
     }
 
     fn generate_heightmap(&mut self, rng: &mut impl Rng) {
@@ -210,7 +222,16 @@ impl <'a> World<'a> {
     }
 
     fn generate_rivers(&mut self) {
-        self.drainage.update(|id, drainage| *drainage = self.rainfall[id]);
+
+        self.drainage.update(|id, drainage| {
+            let mut total = 0.0;
+            total += self.rainfall[id];
+            if self.terrain_category[id] == TerrainCategory::Coast {
+                total += 0.3;
+            }
+            *drainage = total;
+        });
+
         
         for &source in self.height_sorted.iter().rev() {
             if let CellVector::Towards(target, _) = self.downhill[source] {
@@ -262,7 +283,8 @@ impl <'a> World<'a> {
     pub fn rivers(&self) -> &[Path] { &self.rivers }
     pub fn is_river(&self, cell: CellId) -> bool { self.is_river[cell] }
 
-    pub fn biome(&self) -> &Field<Biome> { &self.biome }
+    pub fn ground(&self) -> &Field<Ground> { &self.ground }
+    pub fn vegetation(&self) -> &Field<Vegetation> { &self.vegetation }
 
 }
 

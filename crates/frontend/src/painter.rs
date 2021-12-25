@@ -39,6 +39,7 @@ impl ViewMode {
 
                 DrawCell {
                     color,
+                    stack: vec![],
                     direction: None,
                 }
             }
@@ -54,6 +55,7 @@ impl ViewMode {
                 };
                 DrawCell {
                     color,
+                    stack: vec![],
                     direction: None,
                 }
             }
@@ -62,6 +64,7 @@ impl ViewMode {
                 let color = colors::interpolate_three_colors(mq::BLUE, mq::YELLOW, mq::RED, temperature);
                 DrawCell {
                     color,
+                    stack: vec![],
                     direction: None,
                 }
             }
@@ -79,6 +82,7 @@ impl ViewMode {
 
                 DrawCell {
                     color,
+                    stack: vec![],
                     direction,
                 }
             }
@@ -101,13 +105,49 @@ impl ViewMode {
 
                 DrawCell {
                     color,
+                    stack: vec![],
                     direction,
                 }
             }
             &ViewMode::Biome => {
-                let color = biome_color(world.biome()[cell]);
+                let mut colors = vec![];
+                
+                {
+                    let ground = &world.ground()[cell];
+                    let mut color = mq::Color::new(0.0, 0.0, 0.0, 1.0);
+
+                    color.b += ground.water as f32;
+                    
+                    color.r += 0.64 * ground.soil as f32;
+                    color.g += 0.16 * ground.soil as f32;
+                    color.b += 0.16 * ground.soil as f32;
+
+                    color.r += 0.80 * ground.rock as f32;
+                    color.g += 0.80 * ground.rock as f32;
+                    color.b += 0.80 * ground.rock as f32;
+
+                    color.r += ground.sand as f32;
+                    color.g += ground.sand as f32;
+                    colors.push(color);
+                }
+
+                {
+                    let vegetation = &world.vegetation()[cell];
+                    let mut color = mq::Color::new(0.0, 0.0, 0.0, 1.0 - vegetation.none as f32);
+
+                    color.g += 0.19 * vegetation.boreal as f32;
+                    color.b += 0.12 * vegetation.boreal as f32;
+
+                    color.g += vegetation.deciduous as f32;
+
+                    colors.push(color)
+                }
+
+                
+
                 DrawCell {
-                    color,
+                    color: mq::BLACK,
+                    stack: colors,
                     direction: None,
                 }
             }
@@ -116,7 +156,7 @@ impl ViewMode {
 
     fn paths(&self, world:&World) -> Vec<(Vec<CellId>, mq::Color)> {
         match self {
-            ViewMode::Geography => {
+            ViewMode::Geography | ViewMode::Biome => {
                 world.rivers().iter().map(|path| 
                     (path.cells().iter().copied().collect(), mq::BLUE)
                 ).collect()
@@ -133,6 +173,7 @@ impl ViewMode {
 
 struct DrawCell {
     color: mq::Color,
+    stack: Vec<mq::Color>,
     direction: Option<(mq::Color, f64)>,
 }
 
@@ -163,6 +204,9 @@ impl Painter {
             let drawing = mode.draw_cell(world, cell_id);
             for triangle in triangles {
                 mq::draw_triangle(triangle[0], triangle[1], triangle[2], drawing.color);
+                for &color in drawing.stack.iter() {
+                    mq::draw_triangle(triangle[0], triangle[1], triangle[2], color);
+                }
             }
 
             if let Some((color, direction)) = drawing.direction {
@@ -228,25 +272,5 @@ mod colors {
 
     pub fn lerp8(a: f32, b: f32, t: f32) -> f32 {
         ((1.0 - t) * a) + (t * b)
-    }
-}
-
-fn biome_color(biome: Biome) -> mq::Color {
-    match biome {
-        Biome::Underwater => mq::BLUE,
-        // Very Cold
-        Biome::Tundra => mq::BEIGE,
-        // Cold
-        Biome::BorealForest => mq::DARKGREEN,
-        Biome::ColdDesert => mq::GRAY,
-        // Temperate
-        Biome::TemperateRainforest => mq::GREEN,
-        Biome::TemperateDecidiousForest => mq::GREEN,
-        Biome::Shrubland => mq::MAROON,
-        Biome::TemperateGrassland => mq::GREEN,
-        // Tropicals
-        Biome::TropicalRainforest => mq::DARKGREEN,
-        Biome::Savannah => mq::MAROON,
-        Biome::SubtropicalDesert => mq::YELLOW,
     }
 }

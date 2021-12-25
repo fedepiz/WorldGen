@@ -14,6 +14,9 @@ pub struct World<'a> {
     height_sorted: Vec<CellId>,
     terrain_category: Field<TerrainCategory>,
     temperature: Field<f64>,
+
+    wind: Field<CellVector<f64>>,
+
     rainfall: Field<f64>,
     drainage: Field<f64>,
     rivers: Vec<Path>,
@@ -29,6 +32,7 @@ impl <'a> World<'a> {
             height_sorted: vec![],
             terrain_category: Field::uniform(poly, TerrainCategory::Land),
             temperature: Field::uniform(poly, 0.0),
+            wind: Field::uniform(poly, CellVector::Stationary),
             rainfall: Field::uniform(poly, 0.0),
             drainage: Field::uniform(poly, 0.0),
             rivers: vec![],
@@ -40,14 +44,53 @@ impl <'a> World<'a> {
         let width = self.poly.width() as f64;
         let height = self.poly.height() as f64;
 
+        self.generate_heightmap(rng);
+
+        self.assign_terrain_types();
+      
+        spatial_function::Band::new(width/2.0, height/2.0, 0.0, height/2.0)
+            .add_to_field(&self.poly, &mut self.temperature);
+
+        self.temperature.update(|id, temperature| {
+            // If height > 0.6, proportionally scale down the temperature
+            let height = self.heightmap[id];
+            if height >= 0.6 {
+                let penalty = (height - 0.6)/(1.0 - 0.6);
+                *temperature = *temperature * (1.2 - penalty).min(1.0);
+            }
+        });
+
+       // For now, wind always blows from the east (Remember, 0.0 -> West to East)
+       let tgt_angle = f64::to_radians(180.0); 
+       for (cell_id, cell) in self.poly().borders() {
+            let tgt_neighbor = cell.neighbors().iter().map(|&neighbor_id| {
+                let angle = self.poly().angle_between_cells(cell_id, neighbor_id);
+                let difference = f64::atan2((angle - tgt_angle).sin(), (angle - tgt_angle).cos()).abs();
+                (neighbor_id, difference)
+            }).reduce(|(id1, f1),(id2, f2)| if f1 <= f2 { (id1,f1) } else { (id2, f2) });
+
+            if let Some((tgt_id, difference)) = tgt_neighbor {
+                if difference < f64::to_radians(60.0) {
+                    self.wind[cell_id] = CellVector::Towards(tgt_id, 0.1)
+                }
+            }
+       }
+
+        self.rainfall.update(|_, x| *x = 0.05);
+
+        self.generate_rivers();
+    }
+
+    fn generate_heightmap(&mut self, rng: &mut impl Rng) {
+        let width = self.poly.width() as f64;
+        let height = self.poly.height() as f64;
+
         Slope::with_rng(width, height, rng)
             .scale(0.00025)
             .add_to_field(self.poly, &mut self.heightmap);
         PerlinField::with_rng(0.001, rng).scale(1.0).add_to_field(self.poly, &mut self.heightmap);
         PerlinField::with_rng(0.01, rng).scale(0.2).add_to_field(self.poly, &mut self.heightmap);
-
         
-        //self.heightmap.smooth(&self.poly, 10);
         planchon_darboux(&mut self.heightmap, &self.poly);
         self.heightmap.normalize();
 
@@ -65,7 +108,9 @@ impl <'a> World<'a> {
         });
 
         self.height_sorted = self.heightmap.ascending_order();
+    }
 
+    fn assign_terrain_types(&mut self) {
         self.terrain_category.update(|id, category| {
             let height = self.heightmap[id];
             *category = if height < 0.5 {
@@ -89,12 +134,9 @@ impl <'a> World<'a> {
             }
         }
 
-        spatial_function::Band::new(width/2.0, height/2.0, 0.0, height/2.0)
-            .add_to_field(&self.poly, &mut self.temperature);
+    }
 
-        self.rainfall.update(|_, x| *x = 0.05);
-
-
+    fn generate_rivers(&mut self) {
         self.drainage.update(|id, drainage| *drainage = self.rainfall[id]);
         
         for &cell in self.height_sorted.iter().rev() {
@@ -133,6 +175,9 @@ impl <'a> World<'a> {
 
     pub fn terrain_category(&self) -> &Field<TerrainCategory> { &self.terrain_category }
     pub fn temperature(&self) -> &Field<f64> { &self.temperature }
+
+    pub fn wind(&self) -> &Field<CellVector<f64>> { &self.wind }
+    pub fn rainfall(&self) -> &Field<f64> { &self.rainfall }
     pub fn drainage(&self) -> &Field<f64> { &self.drainage }
     pub fn rivers(&self) -> &[Path] { &self.rivers }
     pub fn is_river(&self, cell: CellId) -> bool { self.is_river[cell] }
@@ -186,6 +231,15 @@ pub enum TerrainCategory {
 pub enum CellVector<T> {
     Stationary,
     Towards(CellId, T),
+}
+
+impl <T> field::Vectorial for CellVector<T> {
+    fn points_to(&self) -> Option<CellId> {
+        match self {
+            Self::Stationary => None,
+            &Self::Towards(tgt, _) => Some(tgt),
+        }
+    }
 }
 
 pub struct Path(Vec<CellId>);

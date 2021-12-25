@@ -11,6 +11,7 @@ pub enum ViewMode {
     Heightmap,
     Geography,
     Temperature,
+    Precipitation,
     Drainage,
 }
 
@@ -22,6 +23,7 @@ impl ViewMode {
             ViewMode::Heightmap => "Heightmap",
             ViewMode::Geography => "Geography",
             ViewMode::Temperature => "Temperature",
+            ViewMode::Precipitation => "Precipitation",
             ViewMode::Drainage => "Drainage"
         }
     }
@@ -59,6 +61,22 @@ impl ViewMode {
                 DrawCell {
                     color,
                     direction: None,
+                }
+            }
+            &ViewMode::Precipitation => {
+                let rain = world.rainfall()[cell] as f32;
+                let color = mq::Color::new(0.0, 0.0, 1.0, rain);
+
+                let direction = match world.wind()[cell] {
+                    CellVector::Stationary => None,
+                        CellVector::Towards(tgt, _) => {
+                            let angle = world.poly().angle_between_cells(cell, tgt);
+                            Some((mq::WHITE, angle))
+                        }
+                };
+                DrawCell {
+                    color,
+                    direction,
                 }
             }
             &ViewMode::Drainage => {

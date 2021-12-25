@@ -71,6 +71,7 @@ pub struct PolyMap {
     width: usize,
     height: usize,
     cells: Vec<Cell>,
+    borders: Vec<CellId>,
 }
 
 impl PolyMap {
@@ -90,7 +91,7 @@ impl PolyMap {
         .expect("Failed to build voronoi diagram");
 
 
-        let cells = voronoi.cells().iter().enumerate()
+        let cells:Vec<_> = voronoi.cells().iter().enumerate()
             .map(|(idx, polygon)| {
                 let exterior: Vec<_> = polygon.points().iter().map(|p| (p.x, p.y)).collect();
                 let polygon = geo::Polygon::new(geo::LineString::from(exterior), vec![]);
@@ -118,10 +119,16 @@ impl PolyMap {
                 }
             }).collect();
             
+        let mut borders:Vec<_> = cells.iter().enumerate()
+            .filter_map(|(idx, cell)| if cell.is_border { Some(CellId(idx))} else { None })
+            .collect();
+        borders.sort();
+
         PolyMap {
             width,
             height,
             cells,
+            borders
         }
     }
 
@@ -149,6 +156,10 @@ impl PolyMap {
             .iter()
             .enumerate()
             .map(|(id, cell)| (CellId(id), cell))
+    }
+
+    pub fn borders(&self) -> impl Iterator<Item = (CellId,&Cell)> {
+        self.borders.iter().map(|&id| (id, &self.cells[id.0]))
     }
 
     pub fn angle_between_cells(&self, from: CellId, to: CellId) -> f64 {

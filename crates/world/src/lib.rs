@@ -1,4 +1,7 @@
 pub mod measure;
+mod biome;
+
+pub use biome::Biome;
 
 use std::{collections::HashSet};
 
@@ -23,6 +26,8 @@ pub struct World<'a> {
     drainage: Field<f64>,
     rivers: Vec<Path>,
     is_river: Field<bool>,
+
+    biome: Field<Biome>
 }
 
 impl <'a> World<'a> {
@@ -38,7 +43,8 @@ impl <'a> World<'a> {
             rainfall: Field::uniform(poly, 0.0),
             drainage: Field::uniform(poly, 0.0),
             rivers: vec![],
-            is_river: Field::uniform(poly, false)
+            is_river: Field::uniform(poly, false),
+            biome: Field::uniform(poly, Biome::Underwater),
         }
     }
 
@@ -69,6 +75,16 @@ impl <'a> World<'a> {
 
 
         self.generate_rivers();
+
+        self.biome.update(|id, biome| {
+            *biome = if self.terrain_category[id] == TerrainCategory::Sea {
+                Biome::Underwater
+            } else {
+                let temperature = self.temperature[id];
+                let rain = self.rainfall[id];
+                Biome::whittaker(temperature, rain)
+            };
+        })
     }
 
     fn generate_heightmap(&mut self, rng: &mut impl Rng) {
@@ -133,6 +149,8 @@ impl <'a> World<'a> {
         self.wind.update(|_, x| *x = Vec2::ZERO);
         
         // For each border tile, we spawn a cloud
+        // TODO: Do not just pick up any border, but just the borders which are opposite to 
+        // the wind-blowing direction
         for (mut cloud_cell, _) in self.poly().borders() {
             let mut vapor = 10.0;
             let mut direction = wind_direction;
@@ -149,8 +167,13 @@ impl <'a> World<'a> {
                     TerrainCategory::Coast => {},
                     TerrainCategory::Land => {
                         let height = self.heightmap[cloud_cell];
+                        let rain_rate = if height < 0.6 {
+                            0.01
+                        } else {
+                            0.02
+                        };
                         let rain = if height < 0.95 {
-                            vapor * 0.02
+                            vapor * rain_rate
                         } else {
                             stop = true;
                             vapor
@@ -159,7 +182,8 @@ impl <'a> World<'a> {
                         self.rainfall[cloud_cell] += rain;
                     }
                 }
-
+                
+                // Broken by a high peak
                 if stop {
                     break;
                 }
@@ -237,6 +261,9 @@ impl <'a> World<'a> {
     pub fn drainage(&self) -> &Field<f64> { &self.drainage }
     pub fn rivers(&self) -> &[Path] { &self.rivers }
     pub fn is_river(&self, cell: CellId) -> bool { self.is_river[cell] }
+
+    pub fn biome(&self) -> &Field<Biome> { &self.biome }
+
 }
 
  fn planchon_darboux(heightmap:&mut Field<f64>, poly_map: &PolyMap) {

@@ -13,6 +13,7 @@ pub enum ViewMode {
     Temperature,
     Precipitation,
     Drainage,
+    Biome,
 }
 
 
@@ -24,7 +25,8 @@ impl ViewMode {
             ViewMode::Geography => "Geography",
             ViewMode::Temperature => "Temperature",
             ViewMode::Precipitation => "Precipitation",
-            ViewMode::Drainage => "Drainage"
+            ViewMode::Drainage => "Drainage",
+            ViewMode::Biome => "Biome",
         }
     }
 
@@ -100,6 +102,13 @@ impl ViewMode {
                 DrawCell {
                     color,
                     direction,
+                }
+            }
+            &ViewMode::Biome => {
+                let color = biome_color(world.biome()[cell]);
+                DrawCell {
+                    color,
+                    direction: None,
                 }
             }
         }
@@ -219,5 +228,25 @@ mod colors {
 
     pub fn lerp8(a: f32, b: f32, t: f32) -> f32 {
         ((1.0 - t) * a) + (t * b)
+    }
+}
+
+fn biome_color(biome: Biome) -> mq::Color {
+    match biome {
+        Biome::Underwater => mq::BLUE,
+        // Very Cold
+        Biome::Tundra => mq::BEIGE,
+        // Cold
+        Biome::BorealForest => mq::DARKGREEN,
+        Biome::ColdDesert => mq::GRAY,
+        // Temperate
+        Biome::TemperateRainforest => mq::GREEN,
+        Biome::TemperateDecidiousForest => mq::GREEN,
+        Biome::Shrubland => mq::MAROON,
+        Biome::TemperateGrassland => mq::GREEN,
+        // Tropicals
+        Biome::TropicalRainforest => mq::DARKGREEN,
+        Biome::Savannah => mq::MAROON,
+        Biome::SubtropicalDesert => mq::YELLOW,
     }
 }

@@ -10,7 +10,7 @@ use spatial_function::{PerlinField, SpatialFunction, Slope};
 pub struct World<'a> {
     poly: &'a PolyMap,
     heightmap: Field<f64>,
-    downhill: Field<CellSlope>,
+    downhill: Field<CellVector<f64>>,
     height_sorted: Vec<CellId>,
     terrain_category: Field<TerrainCategory>,
     temperature: Field<f64>,
@@ -25,7 +25,7 @@ impl <'a> World<'a> {
         Self {
             poly,
             heightmap: Field::uniform(poly, 0.0),
-            downhill: Field::uniform(poly, CellSlope::Depression),
+            downhill: Field::uniform(poly, CellVector::Stationary),
             height_sorted: vec![],
             terrain_category: Field::uniform(poly, TerrainCategory::Land),
             temperature: Field::uniform(poly, 0.0),
@@ -61,7 +61,7 @@ impl <'a> World<'a> {
             // If the minimum neighbor is smaller then me, then that's my slope
             *slope = min_neighbor
                 .filter(|&(_, x)| x < my_height)
-                .map(|(id,_)| CellSlope::Towards(id)).unwrap_or(CellSlope::Depression)
+                .map(|(id, h)| CellVector::Towards(id, my_height - h)).unwrap_or(CellVector::Stationary)
         });
 
         self.height_sorted = self.heightmap.ascending_order();
@@ -94,10 +94,11 @@ impl <'a> World<'a> {
 
         self.rainfall.update(|_, x| *x = 0.05);
 
+
         self.drainage.update(|id, drainage| *drainage = self.rainfall[id]);
         
         for &cell in self.height_sorted.iter().rev() {
-            if let CellSlope::Towards(target) = self.downhill[cell] {
+            if let CellVector::Towards(target, _) = self.downhill[cell] {
                 self.drainage[target] += self.drainage[cell];
             }
         }
@@ -106,12 +107,13 @@ impl <'a> World<'a> {
                 if self.terrain_category[id] == TerrainCategory::Sea {
                     *drainage = 0.0;
                 });
-        
+    
+        // TODO: Detect rivers while doing drainage, detect joinpoints as well
         self.rivers = Path::paths_cascading(
             &|id| self.drainage[id] > 0.95, 
             &|id| match self.downhill[id] {
-                CellSlope::Depression => None,
-                CellSlope::Towards(tgt) => Some(tgt),
+                CellVector::Stationary => None,
+                CellVector::Towards(tgt, _) => Some(tgt),
             }, self.height_sorted.iter().rev().cloned())
             .into_iter().filter(|p| p.cells().len() > 2)
             .collect();
@@ -127,6 +129,8 @@ impl <'a> World<'a> {
     
     pub fn poly(&self) -> &'a PolyMap { self.poly }
     pub fn heightmap(&self) -> &Field<f64> { &self.heightmap }
+    pub fn downhill(&self) -> &Field<CellVector<f64>> { &self.downhill }
+
     pub fn terrain_category(&self) -> &Field<TerrainCategory> { &self.terrain_category }
     pub fn temperature(&self) -> &Field<f64> { &self.temperature }
     pub fn drainage(&self) -> &Field<f64> { &self.drainage }
@@ -179,9 +183,9 @@ pub enum TerrainCategory {
 } 
 
 #[derive(Clone, Copy)]
-pub enum CellSlope {
-    Depression,
-    Towards(CellId),
+pub enum CellVector<T> {
+    Stationary,
+    Towards(CellId, T),
 }
 
 pub struct Path(Vec<CellId>);

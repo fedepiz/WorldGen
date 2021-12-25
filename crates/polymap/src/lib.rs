@@ -150,6 +150,13 @@ impl PolyMap {
             .enumerate()
             .map(|(id, cell)| (CellId(id), cell))
     }
+
+    pub fn angle_between_cells(&self, from: CellId, to: CellId) -> f64 {
+        let (fx, fy) = self.cells[from.0].center();
+        let (tx, ty) = self.cells[to.0].center();
+
+        f64::atan2(-(ty-fy), tx-fx)
+    }
 }
 
 impl std::ops::Index<CellId> for PolyMap {

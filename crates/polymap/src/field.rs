@@ -84,24 +84,3 @@ impl Field<f64> {
         )
     }
 }
-
-pub trait Vectorial {
-    fn points_to(&self) -> Option<CellId>;
-}
-
-impl <T:Vectorial + Clone> Field<T> {
-    pub fn walk(&mut self, source: CellId, mut step: impl FnMut((CellId, &T), (CellId, &mut T)) ) {
-        let mut cell = source;
-        let mut current_vaue = self[cell].clone();
-        loop {
-            match self[cell].points_to() {
-                None => return,
-                Some(next) => {
-                    step((cell, &current_vaue), (next, &mut self[next]));
-                    cell = next;
-                    current_vaue = self[next].clone();
-                }
-            }
-        }
-    }
-}

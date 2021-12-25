@@ -64,23 +64,24 @@ impl ViewMode {
                 }
             }
             &ViewMode::Precipitation => {
-                let rain = world.rainfall()[cell] as f32;
-                let color = mq::Color::new(0.0, 0.0, 1.0, rain);
+                let rain = world::measure::DRAIN.normalize(world.rainfall()[cell]);
+                
+                let color = mq::Color::new(0.0, 0.0, 1.0, rain as f32);
 
-                let direction = match world.wind()[cell] {
-                    CellVector::Stationary => None,
-                        CellVector::Towards(tgt, _) => {
-                            let angle = world.poly().angle_between_cells(cell, tgt);
-                            Some((mq::WHITE, angle))
-                        }
+                let wind_vector = &world.wind()[cell].to_polar().unwrap_or_default();
+                let direction = if wind_vector.r == 0.0 { None} else{ 
+                    let rain = world::measure::RAIN.normalize(wind_vector.r);
+                    let color = mq::Color::new(rain as f32, 0.0, 0.0, rain as f32);
+                    Some((color, wind_vector.theta)) 
                 };
+
                 DrawCell {
                     color,
                     direction,
                 }
             }
             &ViewMode::Drainage => {
-                let drainage = world.drainage()[cell] as f32;
+                let drainage = world::measure::DRAIN.normalize(world.drainage()[cell]) as f32;
                 let color = mq::Color::new(0.0, 0.0, 1.0, drainage);
 
                 let direction = if world.is_river(cell) {

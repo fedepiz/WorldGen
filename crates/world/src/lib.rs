@@ -1,4 +1,6 @@
-use std::collections::HashSet;
+pub mod measure;
+
+use std::{collections::HashSet};
 
 use polymap::*;
 use polymap::field::*;
@@ -15,7 +17,7 @@ pub struct World<'a> {
     terrain_category: Field<TerrainCategory>,
     temperature: Field<f64>,
 
-    wind: Field<CellVector<f64>>,
+    wind: Field<Vec2>,
 
     rainfall: Field<f64>,
     drainage: Field<f64>,
@@ -32,7 +34,7 @@ impl <'a> World<'a> {
             height_sorted: vec![],
             terrain_category: Field::uniform(poly, TerrainCategory::Land),
             temperature: Field::uniform(poly, 0.0),
-            wind: Field::uniform(poly, CellVector::Stationary),
+            wind: Field::uniform(poly, Vec2::ZERO),
             rainfall: Field::uniform(poly, 0.0),
             drainage: Field::uniform(poly, 0.0),
             rivers: vec![],
@@ -47,7 +49,8 @@ impl <'a> World<'a> {
         self.generate_heightmap(rng);
 
         self.assign_terrain_types();
-      
+
+        self.temperature = Field::uniform(&self.poly, 0.0);
         spatial_function::Band::new(width/2.0, height/2.0, 0.0, height/2.0)
             .add_to_field(&self.poly, &mut self.temperature);
 
@@ -60,23 +63,10 @@ impl <'a> World<'a> {
             }
         });
 
-       // For now, wind always blows from the east (Remember, 0.0 -> West to East)
-       let tgt_angle = f64::to_radians(180.0); 
-       for (cell_id, cell) in self.poly().borders() {
-            let tgt_neighbor = cell.neighbors().iter().map(|&neighbor_id| {
-                let angle = self.poly().angle_between_cells(cell_id, neighbor_id);
-                let difference = f64::atan2((angle - tgt_angle).sin(), (angle - tgt_angle).cos()).abs();
-                (neighbor_id, difference)
-            }).reduce(|(id1, f1),(id2, f2)| if f1 <= f2 { (id1,f1) } else { (id2, f2) });
+        self.rainfall.update(|_, x| *x = 0.00);
 
-            if let Some((tgt_id, difference)) = tgt_neighbor {
-                if difference < f64::to_radians(60.0) {
-                    self.wind[cell_id] = CellVector::Towards(tgt_id, 0.1)
-                }
-            }
-       }
+        self.blow_wind(rng);
 
-        self.rainfall.update(|_, x| *x = 0.05);
 
         self.generate_rivers();
     }
@@ -113,7 +103,7 @@ impl <'a> World<'a> {
     fn assign_terrain_types(&mut self) {
         self.terrain_category.update(|id, category| {
             let height = self.heightmap[id];
-            *category = if height < 0.5 {
+            *category = if height < 0.3 {
                 TerrainCategory::Sea
             } else {
                 TerrainCategory::Land
@@ -133,26 +123,90 @@ impl <'a> World<'a> {
                 self.terrain_category[cell] = TerrainCategory::Coast;
             }
         }
+    }
 
+    fn blow_wind(&mut self, rng: &mut impl Rng) {
+        
+        let wind_direction = (rng.gen_range(0..=359) as f64).to_radians();
+
+        // Reset the winds
+        self.wind.update(|_, x| *x = Vec2::ZERO);
+        
+        // For each border tile, we spawn a cloud
+        for (mut cloud_cell, _) in self.poly().borders() {
+            let mut vapor = 10.0;
+            let mut direction = wind_direction;
+            let mut stop = false;
+            let mut visited = Field::uniform(self.poly(), false);
+            // Randomly walk the cell through the world
+            loop {
+                visited[cloud_cell] = true;
+                // If the cell is over water, pick up vapor, but if it's over land, drop some vapor.
+                // Lose all vapour if over mountain
+                let terrain_category = self.terrain_category[cloud_cell];
+                match terrain_category {
+                    TerrainCategory::Sea => vapor += 0.1,
+                    TerrainCategory::Coast => {},
+                    TerrainCategory::Land => {
+                        let height = self.heightmap[cloud_cell];
+                        let rain = if height < 0.95 {
+                            vapor * 0.02
+                        } else {
+                            stop = true;
+                            vapor
+                        };
+                        vapor -= rain;
+                        self.rainfall[cloud_cell] += rain;
+                    }
+                }
+
+                if stop {
+                    break;
+                }
+
+                // Add a random drift
+                let change_magnitude = 2.5;
+                let direction_change = f64::to_radians(rng.gen_range(-change_magnitude..change_magnitude));
+                direction += direction_change;
+                // Record the path of the cell in the wind table
+                self.wind[cloud_cell] += PolarVec2 { r: vapor, theta: direction}.to_cartesian();
+
+                match self.poly().neighbor_in_direction(cloud_cell, direction, 40.0) {
+                    Some(x) => { 
+                        if visited[x] {
+                            break;
+                        } else {
+                            cloud_cell = x 
+                        }
+                    },
+                    None => break
+                }
+            }
+        }
     }
 
     fn generate_rivers(&mut self) {
         self.drainage.update(|id, drainage| *drainage = self.rainfall[id]);
         
-        for &cell in self.height_sorted.iter().rev() {
-            if let CellVector::Towards(target, _) = self.downhill[cell] {
-                self.drainage[target] += self.drainage[cell];
+        for &source in self.height_sorted.iter().rev() {
+            if let CellVector::Towards(target, _) = self.downhill[source] {
+                let both_border = self.poly.cell(source).is_border() && self.poly.cell(target).is_border();
+                if !both_border {
+                    self.drainage[target] += self.drainage[source];
+                }
             }
         }
 
-        self.drainage.update(|id, drainage| 
-                if self.terrain_category[id] == TerrainCategory::Sea {
-                    *drainage = 0.0;
-                });
+        self.drainage.update(|id, drainage| {
+            let is_sea = self.terrain_category[id] == TerrainCategory::Sea;
+            if is_sea {
+                *drainage = 0.0;
+            }
+        });
     
         // TODO: Detect rivers while doing drainage, detect joinpoints as well
         self.rivers = Path::paths_cascading(
-            &|id| self.drainage[id] > 0.95, 
+            &|id| self.drainage[id] > 10.0, 
             &|id| match self.downhill[id] {
                 CellVector::Stationary => None,
                 CellVector::Towards(tgt, _) => Some(tgt),
@@ -176,8 +230,10 @@ impl <'a> World<'a> {
     pub fn terrain_category(&self) -> &Field<TerrainCategory> { &self.terrain_category }
     pub fn temperature(&self) -> &Field<f64> { &self.temperature }
 
-    pub fn wind(&self) -> &Field<CellVector<f64>> { &self.wind }
+    pub fn wind(&self) -> &Field<Vec2> { &self.wind }
+
     pub fn rainfall(&self) -> &Field<f64> { &self.rainfall }
+
     pub fn drainage(&self) -> &Field<f64> { &self.drainage }
     pub fn rivers(&self) -> &[Path] { &self.rivers }
     pub fn is_river(&self, cell: CellId) -> bool { self.is_river[cell] }
@@ -233,15 +289,6 @@ pub enum CellVector<T> {
     Towards(CellId, T),
 }
 
-impl <T> field::Vectorial for CellVector<T> {
-    fn points_to(&self) -> Option<CellId> {
-        match self {
-            Self::Stationary => None,
-            &Self::Towards(tgt, _) => Some(tgt),
-        }
-    }
-}
-
 pub struct Path(Vec<CellId>);
 
 impl Path {
@@ -287,5 +334,49 @@ impl Path {
                     }
                 }
             }
+    }
+}
+
+
+
+#[derive(Clone, Copy)]
+pub struct Vec2 {
+    pub x: f64,
+    pub y: f64,
+}
+
+impl Vec2 {
+    const ZERO: Vec2 = Vec2 { x: 0.0, y: 0.0 };
+
+    pub fn to_polar(&self) -> Option<PolarVec2> {
+        if self.x == 0.0 {
+            None
+        } else {
+            let r = (self.x.powi(2) + self.y.powi(2)).sqrt();
+            let theta = (self.y/self.x).atan();
+            Some(PolarVec2 { r, theta })
+        }
+    }
+}
+
+impl std::ops::AddAssign<Vec2> for Vec2{
+    fn add_assign(&mut self, rhs: Vec2) {
+        self.x += rhs.x;
+        self.y += rhs.y;
+    }
+}
+
+#[derive(Clone, Copy, Default)]
+pub struct PolarVec2 {
+    pub r: f64,
+    pub theta: f64,
+}
+
+impl PolarVec2 {
+    pub fn to_cartesian(&self) -> Vec2 {
+        Vec2 {
+            x: self.r * self.theta.cos(),
+            y: self.r * self.theta.sin()
+        }
     }
 }

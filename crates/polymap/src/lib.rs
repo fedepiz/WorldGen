@@ -139,6 +139,10 @@ impl PolyMap {
         self.height
     }
 
+    pub fn cell(&self, id: CellId) -> &Cell {
+        &self.cells[id.0]
+    }
+
     pub fn cell_at(&self, px: f64, py: f64) -> Option<CellId> {
         if px < 0.0 || py < 0.0 {
             return None;
@@ -168,6 +172,20 @@ impl PolyMap {
 
         f64::atan2(-(ty-fy), tx-fx)
     }
+
+    pub fn neighbor_in_direction(&self, cell: CellId, direction_angle:f64, tolerance: f64) -> Option<CellId> {
+        let tgt_neighbor = self.cells[cell.0].neighbors().iter().map(|&neighbor_id| {
+            let neighbor_angle = self.angle_between_cells(cell, neighbor_id);
+            let difference = angular_difference(direction_angle, neighbor_angle).abs();
+            (neighbor_id, difference)
+        }).reduce(|(id1, f1),(id2, f2)| if f1 <= f2 { (id1,f1) } else { (id2, f2) });
+
+        tgt_neighbor.filter(|&(_, difference)|difference < tolerance).map(|(x,_)| x)
+    }
+}
+
+fn angular_difference(a1: f64, a2: f64) -> f64 {
+    f64::atan2((a2 - a1).sin(), (a2 - a1).cos())
 }
 
 impl std::ops::Index<CellId> for PolyMap {

@@ -4,7 +4,7 @@ use macroquad::prelude::{KeyCode, MouseButton};
 use gui::GuiEvent;
 use painter::ViewMode;
 use polymap::PolyMap;
-use rand::SeedableRng;
+use rand::{Rng, SeedableRng};
 
 mod gui;
 mod tessellation;
@@ -23,18 +23,16 @@ pub fn main() {
 
 
     macroquad::Window::from_config(config, async {
-        let seed = 27049319951022;
+        let mut seed = 27049319951022;
 
         
         let screen_scale_x = WIDTH as f32 / mq::screen_width();
         let screen_scale_y = HEIGHT as f32 / mq::screen_height();
 
         let poly = PolyMap::new(1600, 900, 8.0);
-        let world = {
-            let mut w = world::World::new(&poly);
-            w.generate(&mut rand::rngs::SmallRng::seed_from_u64(seed));
-            w
-        };
+        let mut world = world::World::new(&poly);
+        world.generate(&mut rand::rngs::SmallRng::seed_from_u64(seed));
+
         let mut view_mode = ViewMode::Geography;
         let mut dirty = true;
 
@@ -42,7 +40,6 @@ pub fn main() {
 
         let mut show_gui = false;
 
-        let mut river_mode = false;
 
         loop {
 
@@ -91,7 +88,8 @@ pub fn main() {
             }    
             
             if mq::is_key_pressed(KeyCode::R) {
-                river_mode = !river_mode;
+                seed = rand::thread_rng().gen();
+                world.generate(&mut rand::rngs::SmallRng::seed_from_u64(seed));         
                 dirty = true;
             }        
                 
